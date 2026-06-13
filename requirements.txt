@@ -1,0 +1,8 @@
+requests
+python-dotenv
+flask
+python-telegram-bot
+beautifulsoup4
+rich
+prompt_toolkit
+pyttsx3
