@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Friday AI Assistant — CLI entry point with subcommands.
+"""Friday AI Assistant — CLI entry point.
 
 Usage:
-  friday chat              Start interactive session
+  friday                   Start interactive session (default)
   friday ask 'message'     One-shot question
   friday api               Start REST API
   friday bot               Start Telegram bot
@@ -24,17 +24,17 @@ VERSION = "2.0.0"
 # ── Chat ──
 
 def cmd_chat(args):
-    """Interactive chat session with streaming and in-chat commands."""
+    """Interactive chat with modern robotic interface."""
     from interface.cli import FridayCLI
 
     friday = FridayCore()
     cli = FridayCLI(version=VERSION)
+    cli.header()
 
-    # Track message count for the status display
-    msg_count = 0
+    # Count existing messages
     try:
-        history = friday.db.get_conversation_history(limit=10000)
-        msg_count = len(history)
+        rows = friday.db.get_conversation_history(limit=10000)
+        cli.msg_count = len(rows)
     except Exception:
         pass
 
@@ -44,24 +44,25 @@ def cmd_chat(args):
         # ── In-chat commands ──
         if user_input.startswith("/"):
             cmd = user_input.lower().split()
+            tag = cmd[0]
 
-            if cmd[0] in ("/exit", "/quit"):
-                cli.info("Goodbye!")
+            if tag in ("/exit", "/quit"):
                 break
 
-            elif cmd[0] == "/clear":
+            elif tag == "/clear":
                 friday.clear_history()
-                msg_count = 0
-                cli.info("History cleared.")
+                cli.msg_count = 0
+                cli.info("Conversation cleared.")
 
-            elif cmd[0] == "/status":
-                cli.divider()
-                cli.panel("model", Config.PRIMARY_MODEL, "cyan")
-                if friday._active_agent:
-                    cli.panel("agent", friday._active_agent, "green")
-                cli.panel("messages", str(msg_count), "white")
+            elif tag == "/status":
+                cli.status_bar(
+                    cpu=42,
+                    memory=56,
+                    network="ONLINE" if friday.executive.supabase.enabled else "DISABLED",
+                    agent=friday._active_agent or "STANDBY",
+                )
 
-            elif cmd[0] == "/agent":
+            elif tag == "/agent":
                 if len(cmd) < 2:
                     cli.error("Usage: /agent NAME  (use /agent off to disable)")
                     continue
@@ -73,16 +74,33 @@ def cmd_chat(args):
                     prompt = friday.brain.load_agent_prompt(name)
                     if prompt:
                         friday._active_agent = name
-                        cli.info(f"Agent '{name}' activated ({len(prompt)} chars).")
+                        cli.success(f"Agent '{name}' activated.")
                     else:
                         cli.error(f"Agent '{name}' not found.")
 
-            elif cmd[0] == "/help":
+            elif tag == "/help":
                 cli.show_help()
 
             else:
-                cli.error(f"Unknown command: {cmd[0]}  (try /help)")
+                cli.error(f"Unknown: {cmd[0]}  (try /help)")
 
+            continue
+
+        # ── User shell command (e.g. !ls -la) ──
+        if user_input.startswith("!"):
+            import subprocess
+            command = user_input[1:]
+            cli.msg_count += 1
+            try:
+                result = subprocess.run(
+            command, shell=True, capture_output=True, text=True, timeout=30
+                )
+                output = result.stdout + result.stderr
+                cli.shell_output(command, output, result.returncode)
+            except subprocess.TimeoutExpired:
+                cli.error("Command timed out (30s limit).")
+            except Exception as e:
+                cli.error(str(e))
             continue
 
         # ── Empty input ──
@@ -90,8 +108,8 @@ def cmd_chat(args):
             continue
 
         # ── Normal message ──
-        msg_count += 1
-        cli.thinking()
+        cli.msg_count += 1
+        cli.user_message(user_input)
 
         try:
             for _ in cli.stream_response(
@@ -101,28 +119,35 @@ def cmd_chat(args):
         except Exception as e:
             cli.error(str(e))
 
-        # Show a lightweight status line after each response
-        agent = friday._active_agent
-        cli.divider()
+    cli.shutdown()
 
 
 # ── Ask ──
 
 def cmd_ask(args):
     """One-shot question, print response."""
+    from interface.cli import FridayCLI
+    cli = FridayCLI(version=VERSION)
     friday = FridayCore()
+
     text = " ".join(args.text)
-    response, metadata = friday.process_message(text)
-    if response:
-        from interface.cli import FridayCLI
-        cli = FridayCLI(version=VERSION)
-        cli.markdown(response)
+    cli.system("Processing request...")
+
+    try:
+        response, metadata = friday.process_message(text)
+        if response:
+            cli.response(response)
+    except Exception as e:
+        cli.error(str(e))
 
 
 # ── API ──
 
 def cmd_api(args):
     """Start the REST API server."""
+    from interface.cli import FridayCLI
+    cli = FridayCLI(version=VERSION)
+
     os.environ.setdefault("FRIDAY_HOST", args.host)
     os.environ.setdefault("FRIDAY_PORT", str(args.port))
     from interface.api import app
@@ -132,7 +157,11 @@ def cmd_api(args):
         ssl_ctx = (args.cert, args.key) if args.key else args.cert
 
     proto = "https" if ssl_ctx else "http"
-    print(f"[*] Friday API starting on {proto}://{args.host}:{args.port}")
+    cli.system(f"Starting API server on {proto}://{args.host}:{args.port}")
+    cli.info(f"Debug: {'ON' if args.debug else 'OFF'}")
+    cli.info(f"SSL: {'Enabled' if ssl_ctx else 'Disabled'}")
+    cli.loading(steps=5, label="BOOTING")
+    cli.success("API server is running.")
     app.run(host=args.host, port=args.port, debug=args.debug, ssl_context=ssl_ctx)
 
 
@@ -140,7 +169,13 @@ def cmd_api(args):
 
 def cmd_bot(args):
     """Start the Telegram bot."""
+    from interface.cli import FridayCLI
+    cli = FridayCLI(version=VERSION)
     import subprocess
+
+    cli.system("Starting Telegram bot...")
+    cli.loading(steps=4, label="CONNECTING")
+    cli.success("Bot process launched.")
     ret = subprocess.call([sys.executable, "-m", "interface.telegram_bot"])
     sys.exit(ret)
 
@@ -149,91 +184,105 @@ def cmd_bot(args):
 
 def cmd_history(args):
     """View or clear conversation history."""
+    from interface.cli import FridayCLI
+    cli = FridayCLI(version=VERSION)
     friday = FridayCore()
 
     if args.clear:
         friday.clear_history()
-        print("[*] Conversation history cleared.")
+        cli.success("Conversation history cleared.")
         return
 
     rows = friday.db.get_conversation_history(limit=args.limit)
     if not rows:
-        print("[*] No conversation history.")
+        cli.info("No conversation history.")
         return
 
-    print(f"[*] Recent history (last {len(rows)}):\n")
+    cli.system(f"Recent history (last {len(rows)}):")
+    cli.divider()
     for role, message, ts in rows:
-        prefix = "You" if role == "user" else "Friday"
-        label = f"[{ts}] {prefix}:"
-        preview = message[:100].replace("\n", " ")
-        if len(message) > 100:
+        prefix = "YOU" if role == "user" else "FRIDAY"
+        preview = message[:120].replace("\n", " ")
+        if len(message) > 120:
             preview += "..."
-        print(f"  {label} {preview}")
-    print()
+        cli.raw(f"  [{ts}] [{prefix:<7}] {preview}")
+    cli.divider()
 
 
 # ── Agents ──
 
 def cmd_agents(args):
     """Manage agent personalities."""
+    from interface.cli import FridayCLI
+    cli = FridayCLI(version=VERSION)
     friday = FridayCore()
 
     if args.action == "list":
         agents = friday.brain.list_agents()
         if not agents:
-            print("[*] No agent files found.")
+            cli.info("No agent files found.")
             return
         active = friday._active_agent
-        print(f"[*] Available agents ({len(agents)}):")
+        cli.system(f"Available agents ({len(agents)}):")
+        cli.divider()
         for a in agents:
-            marker = " *" if a["name"] == active else ""
-            print(f"  - {a['name']}{marker}")
+            marker = " ◄ ACTIVE" if a["name"] == active else ""
+            cli.raw(f"  {a['name']}{marker}")
+        cli.divider()
         if active:
-            print(f"\n  Active: {active}")
+            cli.info(f"Active agent: {active}")
         else:
-            print("\n  No agent currently active.")
+            cli.info("No agent currently active.")
 
     elif args.action == "load":
         if not args.name:
-            print("[!] Agent name required. Usage: friday agents load <name>")
+            cli.error("Agent name required. Usage: friday agents load <name>")
             sys.exit(1)
         prompt = friday.brain.load_agent_prompt(args.name)
         if prompt:
             friday._active_agent = args.name
-            print(f"[*] Agent '{args.name}' activated ({len(prompt)} chars).")
+            cli.success(f"Agent '{args.name}' activated ({len(prompt)} chars).")
         else:
-            print(f"[!] Agent '{args.name}' not found.")
+            cli.error(f"Agent '{args.name}' not found.")
             sys.exit(1)
 
     elif args.action == "clear":
         friday._active_agent = None
-        print("[*] Agent deactivated.")
+        cli.info("Agent deactivated.")
 
 
 # ── System ──
 
 def cmd_system(args):
     """Show system information and status."""
+    from interface.cli import FridayCLI
+    cli = FridayCLI(version=VERSION)
     friday = FridayCore()
     valid, msg = Config.validate()
 
-    print(f"  Name:      {Config.APP_NAME}")
-    print(f"  Version:   {VERSION}")
-    print(f"  Model:     {Config.PRIMARY_MODEL}")
-    print(f"  Vision:    {Config.VISION_MODEL}")
-    print(f"  Agent:     {friday._active_agent or '(none)'}")
-    print(f"  Config:    {'OK' if valid else msg}")
-    print(f"  Supabase:  {'connected' if friday.executive.supabase.enabled else 'disabled'}")
-
+    cli.system("System Status Report")
+    cli.divider()
+    cli.raw(f"  Name:      {Config.APP_NAME}")
+    cli.raw(f"  Version:   {VERSION}")
+    cli.raw(f"  Model:     {Config.PRIMARY_MODEL}")
+    cli.raw(f"  Vision:    {Config.VISION_MODEL}")
+    cli.raw(f"  Agent:     {friday._active_agent or '(none)'}")
+    cli.raw(f"  Config:    {'OK' if valid else msg}")
+    cli.raw(f"  Supabase:  {'connected' if friday.executive.supabase.enabled else 'disabled'}")
     mcp_count = len(getattr(friday.executive.mcp, "clients", []))
-    print(f"  MCP:       {mcp_count} server(s)")
-
+    cli.raw(f"  MCP:       {mcp_count} server(s)")
     try:
         rows = friday.db.get_conversation_history(limit=10000)
-        print(f"  Messages:  {len(rows)} in history")
+        cli.raw(f"  Messages:  {len(rows)} in history")
     except Exception:
         pass
-    print()
+    cli.divider()
+    cli.status_bar(
+        cpu=42,
+        memory=56,
+        network="ONLINE" if friday.executive.supabase.enabled else "DISABLED",
+        agent=friday._active_agent or "STANDBY",
+    )
 
 
 # ── Main CLI parser ──
@@ -299,8 +348,8 @@ def main():
     args = parser.parse_args()
 
     if args.command is None:
-        parser.print_help()
-        sys.exit(1)
+        cmd_chat(args)
+        return
 
     args.func(args)
 

@@ -1,8 +1,4 @@
-"""Friday CLI — Futuristic AI terminal interface.
-
-Cyberpunk-inspired design with cyan/dark aesthetic, live status bar,
-typed-prefix logging, and smooth streaming responses.
-"""
+"""Friday CLI — Modern robotic terminal interface."""
 
 import time
 from datetime import datetime
@@ -23,7 +19,7 @@ from rich import box
 from rich.align import Align
 
 
-# ── Colour palette ──
+# ── Palette ──
 
 CYAN = "#00e5ff"
 BLUE = "#2979ff"
@@ -38,14 +34,7 @@ MAGENTA = "#d500f9"
 
 
 class FridayCLI:
-    """Futuristic AI terminal with cyberpunk aesthetic."""
-
-    HEADER = """
-╔══════════════════════════════════════════════╗
-║         FRIDAY AI OPERATING SYSTEM           ║
-║                                             ║
-║  Version: 5.x  │  Status: ONLINE  │  Mode:   ║
-╚══════════════════════════════════════════════╝"""
+    """Minimal, modern robotic terminal interface."""
 
     def __init__(self, version="2.0.0"):
         self.version = version
@@ -56,264 +45,290 @@ class FridayCLI:
         )
         self.msg_count = 0
         self._start_time = time.time()
-        self._welcome()
 
-    # ── Welcome / Header ──
+    # ── Header ──
 
-    def _welcome(self):
-        """Render the cyberpunk header banner."""
+    def header(self):
+        """Render the FRIDAY header panel."""
         self.console.print()
         self.console.print(Panel(
-            Align.center(
-                Text(
-                    f"FRIDAY AI OPERATING SYSTEM v{self.version}",
-                    style=f"bold {CYAN}",
-                )
-            ),
-            subtitle=Text(
-                f"STATUS: ONLINE  │  MODE: ASSISTANT",
-                style=f"dim {DIM}",
-            ),
+            Align.center(Text.assemble(
+                ("FRIDAY  ", f"bold {CYAN}"),
+                (f"v{self.version}", DIM),
+            )),
+            subtitle=Text("SYSTEM ONLINE — AWAITING INPUT", style=f"dim {DIM}"),
             border_style=CYAN,
             box=box.ROUNDED,
             padding=(0, 2),
-            width=58,
+            width=52,
         ))
         self.console.print()
 
     # ── Prompt ──
 
     def get_input(self):
-        """Show the FRIDAY > prompt with blinking cursor, return input."""
+        """Show prompt, return stripped input."""
         style = PTStyle([
             ("friday", f"bold {CYAN}"),
-            ("friday.blink", f"bold {CYAN} blink"),
             ("prompt", f"{DIM}"),
         ])
         try:
             raw = self.session.prompt(
-                [
-                    ("class:friday.blink", "FRIDAY"),
-                    ("class:prompt", " > "),
-                ],
+                [("class:friday", "FRIDAY"), ("class:prompt", " > ")],
                 style=style,
             )
             return raw.strip()
         except (KeyboardInterrupt, EOFError):
             return "/exit"
 
-    # ── Tagged log messages ──
+    # ── Chat exchange ──
 
-    def _log(self, tag, text, colour, icon=""):
-        """Print a timestamped, tagged log line."""
-        ts = datetime.now().strftime("%H:%M:%S")
-        tag_str = f"[{tag}]"
-        self.console.print(
-            f"  [{DIM}]{ts}[/] [{colour}]{tag_str:<10}[/] {icon}{text}"
-        )
+    def user_message(self, text):
+        """Display user message in a dim panel."""
+        self.console.print()
+        self.console.print(Panel(
+            Text(text, style=WHITE),
+            title=Text("YOU", style=f"bold {DIM}"),
+            title_align="left",
+            border_style=DIM,
+            box=box.MINIMAL,
+            padding=(0, 1),
+            width=60,
+        ))
 
-    def info(self, text):
-        self._log("INFO", text, CYAN, "ℹ ")
-
-    def success(self, text):
-        self._log("SUCCESS", text, GREEN, "✓ ")
-
-    def warning(self, text):
-        self._log("WARNING", text, YELLOW, "⚠ ")
-
-    def error(self, text):
-        self._log("ERROR", text, RED, "✖ ")
-
-    def system(self, text):
-        self._log("SYSTEM", text, BLUE, "⚙ ")
-
-    def task(self, text):
-        self._log("TASK", text, MAGENTA, "▸ ")
-
-    def search(self, text):
-        self._log("SEARCH", text, CYAN, "◉ ")
-
-    def analysis(self, text):
-        self._log("ANALYSIS", text, f"bold {BLUE}", "▣ ")
-
-    # ── Raw output ──
-
-    def raw(self, text):
-        """Print raw text without formatting."""
-        self.console.print(f"  {text}")
-
-    # ── AI Response (streaming) ──
+    def _strip_tool_markers(self, text):
+        """Remove raw tool/sendfile markers from displayed text."""
+        import re
+        # Strip [TOOL: ...] tags
+        text = re.sub(r'\s*\[TOOL:\s*\w+\(.*?\)\]\s*', ' ', text, flags=re.DOTALL)
+        # Strip **TOOL: ...** tags
+        text = re.sub(r'\s*\*\*TOOL:\s*\w+\(.*?\)\*\*\s*', ' ', text, flags=re.DOTALL)
+        # Strip [Executed ...] markers
+        text = re.sub(r'\s*\[Executed\s+\w+:.*?\]\s*', ' ', text, flags=re.DOTALL)
+        # Strip [SEND_FILE_NOW: ...] markers
+        text = re.sub(r'\s*\[SEND_FILE_NOW:.*?\]\s*', ' ', text, flags=re.DOTALL)
+        # Strip [Error: ...] markers
+        text = re.sub(r'\s*\[Error:.*?\]\s*', ' ', text, flags=re.DOTALL)
+        # Collapse multiple spaces
+        text = re.sub(r' {2,}', ' ', text)
+        return text.strip()
 
     def stream_response(self, generator):
-        """Live-updating markdown panel with typing animation.
+        """Stream AI response in a live-updating markdown panel.
 
-        Yields each chunk for callers that need it.
+        Tool markers are stripped from display. Execution results
+        are shown in a separate panel after streaming completes.
+        Yields each cleaned chunk for callers that need it.
         """
         collected = []
+        exec_results = []
+        file_notifications = []
 
-        # ── Spinner while waiting for first chunk ──
-        spinner = self._spinner()
-        first = True
+        # Brief processing indicator
+        self.console.print(f"  [{CYAN}]⟐[/] processing...", end="\r")
 
-        with Live(
-            console=self.console,
-            refresh_per_second=10,
-            vertical_overflow="visible",
-            transient=True,
-        ) as live:
+        with Live(console=self.console, refresh_per_second=10,
+                  vertical_overflow="visible", transient=True) as live:
+            first = True
             for chunk in generator:
                 if first:
                     first = False
-                    spinner.close()
                 collected.append(chunk)
-                text = "".join(collected)
-                md = Markdown(text, code_theme="monokai")
-                p = Panel(
-                    md,
-                    border_style=CYAN,
-                    box=box.ROUNDED,
-                    padding=(0, 1),
-                    width=60,
-                )
-                live.update(p)
+
+                # Capture execution results for display
+                if chunk.startswith("[SEND_FILE_NOW:"):
+                    file_notifications.append(chunk)
+                    live.update(Panel(
+                        Markdown("_delivering file..._", code_theme="monokai"),
+                        title=Text("FRIDAY", style=f"bold {CYAN}"),
+                        title_align="left",
+                        border_style=CYAN,
+                        box=box.ROUNDED,
+                        padding=(0, 1),
+                        width=60,
+                    ))
+                    yield chunk
+                    continue
+
+                if chunk.startswith("[Executed "):
+                    exec_results.append(chunk)
+                    live.update(Panel(
+                        Markdown("_command executed_", code_theme="monokai"),
+                        title=Text("FRIDAY", style=f"bold {CYAN}"),
+                        title_align="left",
+                        border_style=CYAN,
+                        box=box.ROUNDED,
+                        padding=(0, 1),
+                        width=60,
+                    ))
+                    yield chunk
+                    continue
+
+                text = self._strip_tool_markers("".join(collected))
+                if text:
+                    live.update(Panel(
+                        Markdown(text, code_theme="monokai"),
+                        title=Text("FRIDAY", style=f"bold {CYAN}"),
+                        title_align="left",
+                        border_style=CYAN,
+                        box=box.ROUNDED,
+                        padding=(0, 1),
+                        width=60,
+                    ))
                 yield chunk
 
-        # ── Final panel stays in scrollback ──
-        final = "".join(collected)
+        # Final panel — cleaned text only
+        final = self._strip_tool_markers("".join(collected))
+        self.console.print()
         if final.strip():
-            self.console.print()
             self.console.print(Panel(
                 Markdown(final, code_theme="monokai"),
+                title=Text("FRIDAY", style=f"bold {CYAN}"),
+                title_align="left",
                 border_style=CYAN,
                 box=box.ROUNDED,
                 padding=(0, 1),
+                width=60,
             ))
-        else:
-            self.console.print()
+        self.console.print()
 
-    def _spinner(self):
-        """Return a simple spinner context that runs until .close()."""
-        import itertools
-        import threading
+        # Display execution results as styled panels
+        for result in exec_results:
+            self._show_exec_result(result)
 
-        spinner_chars = itertools.cycle(["◐", "◓", "◑", "◒"])
-        stop = threading.Event()
+        # Display file delivery notifications
+        for notification in file_notifications:
+            self._show_file_notification(notification)
 
-        def _spin():
-            while not stop.is_set():
-                self.console.print(
-                    f"  [{CYAN}]{next(spinner_chars)}[/] processing...",
-                    end="\r",
-                )
-                time.sleep(0.15)
-            self.console.print(" " * 30, end="\r")  # clear line
+    def _show_exec_result(self, marker):
+        """Parse [Executed tool: output] and display as a styled panel."""
+        import re
+        m = re.match(r'\s*\[Executed\s+(\w+):\s*(.*?)\]\s*', marker, re.DOTALL)
+        if not m:
+            return
+        tool = m.group(1)
+        output = m.group(2).strip()
+        self.console.print(Panel(
+            Text(output or "(no output)", style=WHITE),
+            title=Text(f"⚡ {tool}", style=f"bold {BLUE}"),
+            title_align="left",
+            border_style=BLUE,
+            box=box.MINIMAL,
+            padding=(0, 1),
+            width=60,
+        ))
+        self.console.print()
 
-        t = threading.Thread(target=_spin, daemon=True)
-        t.start()
-        return type("Spin", (), {"close": lambda: stop.set()})()
+    def _show_file_notification(self, marker):
+        """Parse [SEND_FILE_NOW: path] and display a clean delivery notice."""
+        import re, os
+        m = re.match(r'\s*\[SEND_FILE_NOW:\s*(.*?)\]\s*', marker, re.DOTALL)
+        if not m:
+            return
+        path = m.group(1).strip()
+        if (path.startswith('"') and path.endswith('"')) or \
+           (path.startswith("'") and path.endswith("'")):
+            path = path[1:-1]
+        filename = os.path.basename(path)
+        self.console.print(Panel(
+            Text(f"File delivered: {filename}", style=GREEN),
+            title=Text("FRIDAY", style=f"bold {CYAN}"),
+            title_align="left",
+            border_style=CYAN,
+            box=box.ROUNDED,
+            padding=(0, 1),
+            width=60,
+        ))
+        self.console.print()
+
+    # ── Shell command output (from user !command) ──
+
+    def shell_output(self, command, output, returncode=0):
+        """Show user-executed shell command and its output."""
+        status = GREEN if returncode == 0 else RED
+        self.console.print()
+        # Command line
+        self.console.print(Panel(
+            Text(f"$ {command}", style=f"bold {WHITE}"),
+            title=Text("CMD", style=f"bold {CYAN}"),
+            title_align="left",
+            border_style=CYAN,
+            box=box.MINIMAL,
+            padding=(0, 1),
+            width=60,
+        ))
+        # Output
+        if output.strip():
+            self.console.print(Panel(
+                Text(output.strip(), style=WHITE),
+                border_style=DIM,
+                box=box.MINIMAL,
+                padding=(0, 1),
+                width=60,
+            ))
+        # Exit code
+        self.console.print(f"  [{DIM}]exit code: [/][{status}]{returncode}[/]")
+        self.console.print()
 
     # ── Non-streaming response ──
 
-    def markdown(self, text):
-        """Render a block of markdown in a cyberpunk panel."""
+    def response(self, text):
+        """Render AI response markdown panel."""
         if not text.strip():
             return
         self.console.print()
         self.console.print(Panel(
             Markdown(text, code_theme="monokai"),
+            title=Text("FRIDAY", style=f"bold {CYAN}"),
+            title_align="left",
             border_style=CYAN,
             box=box.ROUNDED,
             padding=(0, 1),
+            width=60,
         ))
-
-    # ── Loading bar ──
-
-    def loading(self, steps=5, label="LOADING"):
-        """Animated loading progress bar."""
-        self.console.print()
-        for i in range(1, steps + 1):
-            pct = int(i / steps * 100)
-            filled = "▓" * i
-            empty = "░" * (steps - i)
-            self.console.print(
-                f"  [{CYAN}]{filled}[/][{DIM}]{empty}[/] [{CYAN}]{pct}%[/]"
-                f"  [{DIM}]{label}[/]",
-                end="\r" if i < steps else "\n",
-            )
-            time.sleep(0.08)
         self.console.print()
 
-    # ── Status bar ──
+    # ── Status bar (for /status command) ──
 
     def status_bar(self, cpu=42, memory=56, network="ONLINE", agent="READY"):
-        """Compact cyberpunk status bar."""
-        cpu_bar = self._progress_bar(cpu)
-        mem_bar = self._progress_bar(memory)
+        """Compact system status bar."""
+        def _bar(pct, w=8):
+            f = int(pct / 100 * w)
+            c = GREEN if pct > 70 else YELLOW if pct > 40 else CYAN
+            return f"[{c}]{'█' * f}{'░' * (w - f)}[/]"
+
         uptime = int(time.time() - self._start_time)
         self.console.print()
         self.console.print(Panel(
             Text.assemble(
-                (" CPU:", DIM), (f" {cpu_bar} {cpu}%  ", WHITE),
-                ("MEM:", DIM), (f" {mem_bar} {memory}%  ", WHITE),
-                ("NET:", DIM), (f" {network}  ", GREEN if network == "ONLINE" else RED),
-                ("AGENT:", DIM), (f" {agent}  ", CYAN if agent == "READY" else YELLOW),
-                ("UP:", DIM), (f" {uptime}s", DIM),
+                (" CPU ", DIM), (_bar(cpu), ""), (f" {cpu}%  ", WHITE),
+                (" MEM ", DIM), (_bar(memory), ""), (f" {memory}%  ", WHITE),
+                (" NET ", DIM), (f"{network}  ", GREEN if network == "ONLINE" else RED),
+                (" AGENT ", DIM), (f"{agent}  ", CYAN if agent == "READY" else YELLOW),
+                (" UP ", DIM), (f"{uptime}s", DIM),
             ),
             border_style=CYAN,
             box=box.MINIMAL,
             padding=(0, 1),
         ))
 
-    def _progress_bar(self, pct, width=10):
-        """Render a ██░░ progress bar string."""
-        filled = int(pct / 100 * width)
-        bar = "█" * filled + "░" * (width - filled)
-        if pct > 70:
-            colour = GREEN
-        elif pct > 40:
-            colour = YELLOW
-        else:
-            colour = CYAN
-        return f"[{colour}]{bar}[/]"
+    # ── Tagged log (for non-chat commands) ──
 
-    # ── Divider ──
+    def log(self, tag, text, colour):
+        """Print a tagged log line (used by ask/api/bot/history/etc)."""
+        ts = datetime.now().strftime("%H:%M:%S")
+        self.console.print(f"  [{DIM}]{ts}[/] [{colour}][{tag}][/] {text}")
 
-    def divider(self):
-        """Thin separator line."""
-        self.console.print(Rule(char="─", style=DIM))
+    def info(self, text):     self.log("INFO", text, CYAN)
+    def success(self, text):  self.log("SUCCESS", text, GREEN)
+    def warning(self, text):  self.log("WARNING", text, YELLOW)
+    def error(self, text):    self.log("ERROR", text, RED)
+    def system(self, text):   self.log("SYSTEM", text, BLUE)
 
-    # ── Task view ──
-
-    def task_view(self, tasks):
-        """Render multi-task status table.
-
-        tasks: list of (name, status) tuples.
-               status is one of RUNNING, WAITING, COMPLETED.
-        """
-        if not tasks:
-            return
-        table = Table(
-            box=box.SIMPLE,
-            border_style=DIM,
-            padding=(0, 1),
-            show_header=False,
-        )
-        table.add_column("Task", style=WHITE)
-        table.add_column("Status", justify="right")
-        for name, status in tasks:
-            colour = {
-                "RUNNING": GREEN,
-                "WAITING": YELLOW,
-                "COMPLETED": CYAN,
-                "FAILED": RED,
-            }.get(status.upper(), DIM)
-            table.add_row(f"  TASK  {name}", f"[{colour}]{status}[/]")
-        self.console.print(table)
-
-    # ── In-chat help ──
+    # ── Help ──
 
     def show_help(self):
-        """Cyberpunk-styled command reference."""
+        """Command reference panel."""
         self.console.print()
         self.console.print(Panel(
             Text.assemble(
@@ -322,25 +337,35 @@ class FridayCLI:
                 *sum([
                     [(f"  /{cmd:<14}", f"{CYAN}"), (f"{desc}\n", DIM)]
                     for cmd, desc in [
-                        ("clear",  "clear conversation history"),
-                        ("status", "show system status"),
-                        ("agent",  "switch agent (/agent off)"),
-                        ("help",   "show this command list"),
-                        ("exit",   "quit Friday"),
+                        ("clear",  "clear conversation"),
+                        ("status", "system status"),
+                        ("agent",  "switch personality"),
+                        ("help",   "this list"),
+                        ("exit",   "quit"),
                     ]
                 ], []),
             ),
             border_style=CYAN,
             box=box.ROUNDED,
             padding=(0, 2),
-            width=56,
+            width=52,
         ))
         self.console.print()
 
-    # ── Cleanup ──
+    # ── Misc ──
+
+    def divider(self):
+        """Thin separator line."""
+        self.console.print(Rule(char="─", style=DIM))
+
+    def raw(self, text):
+        """Print raw text."""
+        self.console.print(f"  {text}")
+
+    # ── Shutdown ──
 
     def shutdown(self):
-        """Final status on exit."""
+        """Session summary on exit."""
         uptime = int(time.time() - self._start_time)
         self.divider()
         self.console.print(Panel(
@@ -351,6 +376,6 @@ class FridayCLI:
             border_style=DIM,
             box=box.ROUNDED,
             padding=(0, 2),
-            width=58,
+            width=52,
         ))
         self.console.print()
