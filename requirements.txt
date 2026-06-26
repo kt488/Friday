@@ -6,3 +6,5 @@ beautifulsoup4
 rich
 prompt_toolkit
 pyttsx3
+openpyxl
+PyPDF2

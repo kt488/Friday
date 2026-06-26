@@ -23,6 +23,7 @@ class Config:
     
     # Directory Settings
     TEMP_DIR = os.path.abspath("temp")
+    AGENTS_DIR = os.path.abspath("agents")
     
     # App Settings
     APP_NAME = "Friday Assistant"

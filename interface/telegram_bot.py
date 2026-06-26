@@ -42,7 +42,13 @@ async def process_and_respond(update: Update, context: ContextTypes.DEFAULT_TYPE
     await context.bot.send_chat_action(chat_id=chat_id, action="typing")
     
     # Initialize placeholder message
-    status_msg = await context.bot.send_message(chat_id=chat_id, text="..." if not image_path else "Analyzing image...")
+    if image_path:
+        placeholder = "Analyzing image..."
+    elif user_text and "[FILE:" in user_text:
+        placeholder = "Parsing file..."
+    else:
+        placeholder = "..."
+    status_msg = await context.bot.send_message(chat_id=chat_id, text=placeholder)
     
     full_text = ""
     last_update_time = 0
@@ -58,8 +64,9 @@ async def process_and_respond(update: Update, context: ContextTypes.DEFAULT_TYPE
                 try:
                     if full_text.strip():
                         # Filter out internal tags before showing user
-                        display_text = re.sub(r'\[TOOL:.*?\]', '', full_text)
-                        display_text = re.sub(r'\[SEND_FILE:.*?\]', '', display_text)
+                        display_text = re.sub(r'(?:\[TOOL:|\*\*TOOL:).*?(?:\]|\*\*)', '', full_text, flags=re.DOTALL)
+                        display_text = re.sub(r'(?:\[SEND_FILE:|\*\*SEND_FILE:).*?(?:\]|\*\*)', '', display_text, flags=re.DOTALL)
+                        display_text = re.sub(r'(?:\[SEND_FILE_NOW:|\*\*SEND_FILE_NOW:).*?(?:\]|\*\*)', '', display_text, flags=re.DOTALL)
                         
                         if display_text.strip():
                             await context.bot.edit_message_text(
@@ -72,10 +79,11 @@ async def process_and_respond(update: Update, context: ContextTypes.DEFAULT_TYPE
                     pass
                     
         # Final update
-        display_text = re.sub(r'\[TOOL:.*?\]', '', full_text)
-        # Handle [SEND_FILE: path] tag
-        file_match = re.search(r'\[SEND_FILE:\s*(.*?)\]', full_text)
-        display_text = re.sub(r'\[SEND_FILE:.*?\]', '', display_text).strip()
+        display_text = re.sub(r'(?:\[TOOL:|\*\*TOOL:).*?(?:\]|\*\*)', '', full_text, flags=re.DOTALL)
+        # Handle [SEND_FILE_NOW: path] tag — file ready for direct delivery
+        file_match = re.search(r'(?:\[SEND_FILE_NOW:|\*\*SEND_FILE_NOW:)\s*(.*?)(?:\]|\*\*)', full_text, flags=re.DOTALL)
+        display_text = re.sub(r'(?:\[SEND_FILE:|\*\*SEND_FILE:).*?(?:\]|\*\*)', '', display_text, flags=re.DOTALL)
+        display_text = re.sub(r'(?:\[SEND_FILE_NOW:|\*\*SEND_FILE_NOW:).*?(?:\]|\*\*)', '', display_text, flags=re.DOTALL).strip()
         
         if not display_text:
             display_text = "Done."
@@ -88,28 +96,13 @@ async def process_and_respond(update: Update, context: ContextTypes.DEFAULT_TYPE
         
         if file_match:
             file_path = file_match.group(1).strip()
-            # Clean up quotes
             if (file_path.startswith('"') and file_path.endswith('"')) or \
                (file_path.startswith("'") and file_path.endswith("'")):
                 file_path = file_path[1:-1]
-            
-            # Check absolute path, then check inside workspace/
-            workspace_dir = os.path.abspath("workspace")
-            possible_paths = [
-                file_path,
-                os.path.join(workspace_dir, os.path.basename(file_path)),
-                os.path.join(workspace_dir, file_path)
-            ]
-            
-            file_found = False
-            for p in possible_paths:
-                if os.path.exists(p):
-                    await context.bot.send_document(chat_id=chat_id, document=open(p, 'rb'))
-                    file_found = True
-                    break
-            
-            if not file_found:
-                await context.bot.send_message(chat_id=chat_id, text=f"I tried to send {file_path}, but it seems I misplaced it.")
+            if os.path.exists(file_path):
+                await context.bot.send_document(chat_id=chat_id, document=open(file_path, 'rb'))
+            else:
+                await context.bot.send_message(chat_id=chat_id, text=f"I tried to send {os.path.basename(file_path)}, but it seems I misplaced it.")
 
 
     except Exception as e:
@@ -128,16 +121,43 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Get the highest resolution photo
     photo = update.message.photo[-1]
     file = await context.bot.get_file(photo.file_id)
-    
+
     file_path = os.path.join(Config.TEMP_DIR, f"photo_{int(time.time())}.jpg")
     await file.download_to_drive(file_path)
-    
+
+    # Upload to Supabase Storage for persistence
+    try:
+        url = friday.executive.supabase.upload_file(file_path, bucket="friday-files")
+        if url:
+            logging.info(f"[Supabase] Uploaded photo: {url}")
+    except Exception as e:
+        logging.warning(f"[Supabase] Photo upload failed: {e}")
+
     caption = update.message.caption if update.message.caption else "Analyze this."
     await process_and_respond(update, context, user_text=caption, image_path=file_path)
 
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # For now, we'll just acknowledge the voice and maybe transcribe later
     await context.bot.send_message(chat_id=update.effective_chat.id, text="I hear you, but my ears are still a bit digital. Send me text or pictures for now while I tune my sensors.")
+
+async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    doc = update.message.document
+    file = await context.bot.get_file(doc.file_id)
+    temp_dir = os.path.abspath("temp")
+    os.makedirs(temp_dir, exist_ok=True)
+    file_path = os.path.join(temp_dir, doc.file_name or f"file_{int(time.time())}")
+    await file.download_to_drive(file_path)
+
+    # Upload to Supabase Storage for persistence
+    try:
+        url = friday.executive.supabase.upload_file(file_path, bucket="friday-files")
+        if url:
+            logging.info(f"[Supabase] Uploaded document: {url}")
+    except Exception as e:
+        logging.warning(f"[Supabase] Document upload failed: {e}")
+
+    caption = update.message.caption if update.message.caption else "Parse this file and give me the data."
+    await process_and_respond(update, context, user_text=f"[FILE: {file_path}] {caption}")
 
 if __name__ == '__main__':
     if not TOKEN:
@@ -152,6 +172,7 @@ if __name__ == '__main__':
     application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_text))
     application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     application.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, handle_voice))
-    
+    application.add_handler(MessageHandler(filters.Document.ALL, handle_document))
+
     print("Friday is online and listening...")
     application.run_polling()

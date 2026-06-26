@@ -1,0 +1,688 @@
+2026-06-25 10:21:14,963 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getMe "HTTP/1.1 200 OK"
+2026-06-25 10:21:15,385 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/deleteWebhook "HTTP/1.1 200 OK"
+2026-06-25 10:21:15,397 - telegram.ext.Application - INFO - Application started
+2026-06-25 10:21:26,768 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:21:38,661 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:21:50,182 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:21:59,884 - telegram.ext.Application - ERROR - No error handlers are registered, logging exception.
+Traceback (most recent call last):
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpx/_transports/default.py", line 101, in map_httpcore_exceptions
+    yield
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpx/_transports/default.py", line 394, in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpcore/_async/connection_pool.py", line 256, in handle_async_request
+    raise exc from None
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpcore/_async/connection_pool.py", line 236, in handle_async_request
+    response = await connection.handle_async_request(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        pool_request.request
+        ^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpcore/_async/connection.py", line 103, in handle_async_request
+    return await self._connection.handle_async_request(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpcore/_async/http11.py", line 136, in handle_async_request
+    raise exc
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpcore/_async/http11.py", line 106, in handle_async_request
+    ) = await self._receive_response_headers(**kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpcore/_async/http11.py", line 177, in _receive_response_headers
+    event = await self._receive_event(timeout=timeout)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpcore/_async/http11.py", line 231, in _receive_event
+    raise RemoteProtocolError(msg)
+httpcore.RemoteProtocolError: Server disconnected without sending a response.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/telegram/request/_httpxrequest.py", line 279, in do_request
+    res = await self._client.request(
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpx/_client.py", line 1540, in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpx/_client.py", line 1629, in send
+    response = await self._send_handling_auth(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+    )
+    ^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpx/_client.py", line 1657, in _send_handling_auth
+    response = await self._send_handling_redirects(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpx/_client.py", line 1694, in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpx/_client.py", line 1730, in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpx/_transports/default.py", line 393, in handle_async_request
+    with map_httpcore_exceptions():
+         ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/data/data/com.termux/files/usr/lib/python3.13/contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    ~~~~~~~~~~~~~~^^^^^^^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpx/_transports/default.py", line 118, in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+httpx.RemoteProtocolError: Server disconnected without sending a response.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/telegram/ext/_utils/networkloop.py", line 161, in network_retry_loop
+    await do_action()
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/telegram/ext/_utils/networkloop.py", line 154, in do_action
+    action_cb_task.result()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/telegram/ext/_updater.py", line 340, in polling_action_cb
+    updates = await self.bot.get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/telegram/ext/_extbot.py", line 680, in get_updates
+    updates = await super().get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<9 lines>...
+    )
+    ^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/telegram/_bot.py", line 4767, in get_updates
+    await self._post(
+    ^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    ),
+    ^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/telegram/_bot.py", line 712, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/telegram/ext/_extbot.py", line 378, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/telegram/_bot.py", line 741, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/telegram/request/_baserequest.py", line 198, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/telegram/request/_baserequest.py", line 305, in _request_wrapper
+    code, payload = await self.do_request(
+                    ^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/telegram/request/_httpxrequest.py", line 303, in do_request
+    raise NetworkError(f"httpx.{err.__class__.__name__}: {err}") from err
+telegram.error.NetworkError: httpx.RemoteProtocolError: Server disconnected without sending a response.
+2026-06-25 10:22:17,781 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:22:28,342 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:22:35,545 - telegram.ext.Application - ERROR - No error handlers are registered, logging exception.
+Traceback (most recent call last):
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpx/_transports/default.py", line 101, in map_httpcore_exceptions
+    yield
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpx/_transports/default.py", line 394, in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpcore/_async/connection_pool.py", line 256, in handle_async_request
+    raise exc from None
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpcore/_async/connection_pool.py", line 236, in handle_async_request
+    response = await connection.handle_async_request(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        pool_request.request
+        ^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpcore/_async/connection.py", line 103, in handle_async_request
+    return await self._connection.handle_async_request(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpcore/_async/http11.py", line 136, in handle_async_request
+    raise exc
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpcore/_async/http11.py", line 106, in handle_async_request
+    ) = await self._receive_response_headers(**kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpcore/_async/http11.py", line 177, in _receive_response_headers
+    event = await self._receive_event(timeout=timeout)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpcore/_async/http11.py", line 231, in _receive_event
+    raise RemoteProtocolError(msg)
+httpcore.RemoteProtocolError: Server disconnected without sending a response.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/telegram/request/_httpxrequest.py", line 279, in do_request
+    res = await self._client.request(
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpx/_client.py", line 1540, in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpx/_client.py", line 1629, in send
+    response = await self._send_handling_auth(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+    )
+    ^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpx/_client.py", line 1657, in _send_handling_auth
+    response = await self._send_handling_redirects(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpx/_client.py", line 1694, in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpx/_client.py", line 1730, in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpx/_transports/default.py", line 393, in handle_async_request
+    with map_httpcore_exceptions():
+         ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/data/data/com.termux/files/usr/lib/python3.13/contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    ~~~~~~~~~~~~~~^^^^^^^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpx/_transports/default.py", line 118, in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+httpx.RemoteProtocolError: Server disconnected without sending a response.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/telegram/ext/_utils/networkloop.py", line 161, in network_retry_loop
+    await do_action()
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/telegram/ext/_utils/networkloop.py", line 154, in do_action
+    action_cb_task.result()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/telegram/ext/_updater.py", line 340, in polling_action_cb
+    updates = await self.bot.get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/telegram/ext/_extbot.py", line 680, in get_updates
+    updates = await super().get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<9 lines>...
+    )
+    ^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/telegram/_bot.py", line 4767, in get_updates
+    await self._post(
+    ^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    ),
+    ^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/telegram/_bot.py", line 712, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/telegram/ext/_extbot.py", line 378, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/telegram/_bot.py", line 741, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/telegram/request/_baserequest.py", line 198, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/telegram/request/_baserequest.py", line 305, in _request_wrapper
+    code, payload = await self.do_request(
+                    ^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/telegram/request/_httpxrequest.py", line 303, in do_request
+    raise NetworkError(f"httpx.{err.__class__.__name__}: {err}") from err
+telegram.error.NetworkError: httpx.RemoteProtocolError: Server disconnected without sending a response.
+2026-06-25 10:22:49,798 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:23:00,429 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:23:10,970 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:23:21,518 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:23:32,425 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:24:02,831 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:24:44,368 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:24:47,285 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/sendChatAction "HTTP/1.1 200 OK"
+2026-06-25 10:24:47,888 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/sendMessage "HTTP/1.1 200 OK"
+2026-06-25 10:24:50,427 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/editMessageText "HTTP/1.1 200 OK"
+2026-06-25 10:24:51,350 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/editMessageText "HTTP/1.1 200 OK"
+2026-06-25 10:24:56,284 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:25:06,800 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:25:20,139 - telegram.ext.Application - ERROR - No error handlers are registered, logging exception.
+Traceback (most recent call last):
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpx/_transports/default.py", line 101, in map_httpcore_exceptions
+    yield
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpx/_transports/default.py", line 394, in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpcore/_async/connection_pool.py", line 256, in handle_async_request
+    raise exc from None
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpcore/_async/connection_pool.py", line 236, in handle_async_request
+    response = await connection.handle_async_request(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        pool_request.request
+        ^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpcore/_async/connection.py", line 103, in handle_async_request
+    return await self._connection.handle_async_request(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpcore/_async/http11.py", line 136, in handle_async_request
+    raise exc
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpcore/_async/http11.py", line 106, in handle_async_request
+    ) = await self._receive_response_headers(**kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpcore/_async/http11.py", line 177, in _receive_response_headers
+    event = await self._receive_event(timeout=timeout)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpcore/_async/http11.py", line 231, in _receive_event
+    raise RemoteProtocolError(msg)
+httpcore.RemoteProtocolError: Server disconnected without sending a response.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/telegram/request/_httpxrequest.py", line 279, in do_request
+    res = await self._client.request(
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpx/_client.py", line 1540, in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpx/_client.py", line 1629, in send
+    response = await self._send_handling_auth(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+    )
+    ^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpx/_client.py", line 1657, in _send_handling_auth
+    response = await self._send_handling_redirects(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpx/_client.py", line 1694, in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpx/_client.py", line 1730, in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpx/_transports/default.py", line 393, in handle_async_request
+    with map_httpcore_exceptions():
+         ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/data/data/com.termux/files/usr/lib/python3.13/contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    ~~~~~~~~~~~~~~^^^^^^^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpx/_transports/default.py", line 118, in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+httpx.RemoteProtocolError: Server disconnected without sending a response.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/telegram/ext/_utils/networkloop.py", line 161, in network_retry_loop
+    await do_action()
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/telegram/ext/_utils/networkloop.py", line 154, in do_action
+    action_cb_task.result()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/telegram/ext/_updater.py", line 340, in polling_action_cb
+    updates = await self.bot.get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/telegram/ext/_extbot.py", line 680, in get_updates
+    updates = await super().get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<9 lines>...
+    )
+    ^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/telegram/_bot.py", line 4767, in get_updates
+    await self._post(
+    ^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    ),
+    ^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/telegram/_bot.py", line 712, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/telegram/ext/_extbot.py", line 378, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/telegram/_bot.py", line 741, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/telegram/request/_baserequest.py", line 198, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/telegram/request/_baserequest.py", line 305, in _request_wrapper
+    code, payload = await self.do_request(
+                    ^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/telegram/request/_httpxrequest.py", line 303, in do_request
+    raise NetworkError(f"httpx.{err.__class__.__name__}: {err}") from err
+telegram.error.NetworkError: httpx.RemoteProtocolError: Server disconnected without sending a response.
+2026-06-25 10:25:39,609 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:25:43,177 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/sendChatAction "HTTP/1.1 200 OK"
+2026-06-25 10:25:43,833 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/sendMessage "HTTP/1.1 200 OK"
+2026-06-25 10:25:46,060 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/editMessageText "HTTP/1.1 200 OK"
+2026-06-25 10:25:46,776 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/editMessageText "HTTP/1.1 200 OK"
+2026-06-25 10:25:51,964 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:26:03,081 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:26:14,922 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:26:27,678 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:27:07,995 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:27:50,567 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:27:52,515 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/sendChatAction "HTTP/1.1 200 OK"
+2026-06-25 10:27:53,141 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/sendMessage "HTTP/1.1 200 OK"
+2026-06-25 10:27:55,162 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/editMessageText "HTTP/1.1 200 OK"
+2026-06-25 10:27:56,015 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/editMessageText "HTTP/1.1 200 OK"
+2026-06-25 10:27:56,830 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/editMessageText "HTTP/1.1 200 OK"
+2026-06-25 10:28:01,417 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:28:12,681 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:28:39,908 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:28:50,385 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:29:00,808 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:29:12,471 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:29:22,912 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:29:33,409 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:29:43,844 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:29:54,288 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:30:04,752 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:30:15,238 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:30:25,700 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:30:36,147 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:30:46,595 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:30:57,007 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:31:07,969 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:31:18,449 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:31:29,168 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:31:39,591 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:31:50,024 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:32:00,448 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:32:10,949 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:32:21,426 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:32:31,894 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:32:42,328 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:32:52,862 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:33:03,294 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:33:15,408 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:33:25,841 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:33:36,279 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:33:46,689 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:34:27,135 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:34:37,622 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:34:43,802 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/sendChatAction "HTTP/1.1 200 OK"
+2026-06-25 10:34:44,460 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/sendMessage "HTTP/1.1 200 OK"
+2026-06-25 10:34:48,384 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/editMessageText "HTTP/1.1 200 OK"
+2026-06-25 10:34:49,839 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/editMessageText "HTTP/1.1 200 OK"
+2026-06-25 10:34:53,558 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/editMessageText "HTTP/1.1 200 OK"
+2026-06-25 10:34:54,615 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/editMessageText "HTTP/1.1 200 OK"
+2026-06-25 10:34:55,303 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/editMessageText "HTTP/1.1 200 OK"
+2026-06-25 10:34:56,036 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/editMessageText "HTTP/1.1 200 OK"
+2026-06-25 10:34:56,693 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/editMessageText "HTTP/1.1 200 OK"
+2026-06-25 10:35:07,675 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:35:12,876 - telegram.ext.Application - ERROR - No error handlers are registered, logging exception.
+Traceback (most recent call last):
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpx/_transports/default.py", line 101, in map_httpcore_exceptions
+    yield
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpx/_transports/default.py", line 394, in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpcore/_async/connection_pool.py", line 256, in handle_async_request
+    raise exc from None
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpcore/_async/connection_pool.py", line 236, in handle_async_request
+    response = await connection.handle_async_request(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        pool_request.request
+        ^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpcore/_async/connection.py", line 103, in handle_async_request
+    return await self._connection.handle_async_request(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpcore/_async/http11.py", line 136, in handle_async_request
+    raise exc
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpcore/_async/http11.py", line 106, in handle_async_request
+    ) = await self._receive_response_headers(**kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpcore/_async/http11.py", line 177, in _receive_response_headers
+    event = await self._receive_event(timeout=timeout)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpcore/_async/http11.py", line 231, in _receive_event
+    raise RemoteProtocolError(msg)
+httpcore.RemoteProtocolError: Server disconnected without sending a response.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/telegram/request/_httpxrequest.py", line 279, in do_request
+    res = await self._client.request(
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpx/_client.py", line 1540, in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpx/_client.py", line 1629, in send
+    response = await self._send_handling_auth(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+    )
+    ^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpx/_client.py", line 1657, in _send_handling_auth
+    response = await self._send_handling_redirects(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpx/_client.py", line 1694, in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpx/_client.py", line 1730, in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpx/_transports/default.py", line 393, in handle_async_request
+    with map_httpcore_exceptions():
+         ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/data/data/com.termux/files/usr/lib/python3.13/contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    ~~~~~~~~~~~~~~^^^^^^^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/httpx/_transports/default.py", line 118, in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+httpx.RemoteProtocolError: Server disconnected without sending a response.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/telegram/ext/_utils/networkloop.py", line 161, in network_retry_loop
+    await do_action()
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/telegram/ext/_utils/networkloop.py", line 154, in do_action
+    action_cb_task.result()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/telegram/ext/_updater.py", line 340, in polling_action_cb
+    updates = await self.bot.get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/telegram/ext/_extbot.py", line 680, in get_updates
+    updates = await super().get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<9 lines>...
+    )
+    ^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/telegram/_bot.py", line 4767, in get_updates
+    await self._post(
+    ^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    ),
+    ^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/telegram/_bot.py", line 712, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/telegram/ext/_extbot.py", line 378, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/telegram/_bot.py", line 741, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/telegram/request/_baserequest.py", line 198, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/telegram/request/_baserequest.py", line 305, in _request_wrapper
+    code, payload = await self.do_request(
+                    ^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/telegram/request/_httpxrequest.py", line 303, in do_request
+    raise NetworkError(f"httpx.{err.__class__.__name__}: {err}") from err
+telegram.error.NetworkError: httpx.RemoteProtocolError: Server disconnected without sending a response.
+2026-06-25 10:35:38,332 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:35:48,997 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:35:59,552 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:36:11,198 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:36:20,252 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:36:28,191 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/sendChatAction "HTTP/1.1 200 OK"
+2026-06-25 10:36:28,861 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/sendMessage "HTTP/1.1 200 OK"
+2026-06-25 10:36:32,679 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:36:40,638 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/editMessageText "HTTP/1.1 200 OK"
+2026-06-25 10:36:44,182 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/editMessageText "HTTP/1.1 200 OK"
+2026-06-25 10:36:44,870 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/editMessageText "HTTP/1.1 200 OK"
+2026-06-25 10:36:45,605 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/editMessageText "HTTP/1.1 200 OK"
+2026-06-25 10:37:04,320 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:37:17,363 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:37:31,053 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:37:41,709 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:38:12,796 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:38:21,901 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 409 Conflict"
+2026-06-25 10:38:21,911 - telegram.ext.Application - ERROR - No error handlers are registered, logging exception.
+Traceback (most recent call last):
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/telegram/ext/_utils/networkloop.py", line 161, in network_retry_loop
+    await do_action()
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/telegram/ext/_utils/networkloop.py", line 154, in do_action
+    action_cb_task.result()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/telegram/ext/_updater.py", line 340, in polling_action_cb
+    updates = await self.bot.get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/telegram/ext/_extbot.py", line 680, in get_updates
+    updates = await super().get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<9 lines>...
+    )
+    ^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/telegram/_bot.py", line 4767, in get_updates
+    await self._post(
+    ^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    ),
+    ^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/telegram/_bot.py", line 712, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/telegram/ext/_extbot.py", line 378, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/telegram/_bot.py", line 741, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/telegram/request/_baserequest.py", line 198, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "/data/data/com.termux/files/usr/lib/python3.13/site-packages/telegram/request/_baserequest.py", line 375, in _request_wrapper
+    raise exception
+telegram.error.Conflict: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+2026-06-25 10:38:33,420 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:38:48,412 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:38:58,867 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:39:09,333 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:39:19,813 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:39:30,261 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:39:40,724 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:39:51,211 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:40:01,717 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:40:12,204 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:40:22,781 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:40:28,918 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8795665378:AAE--BQf0WtrK1hYbI_9u13v44MoaNTdjLs/getUpdates "HTTP/1.1 200 OK"
+2026-06-25 10:40:28,932 - telegram.ext.Application - INFO - Application is stopping. This might take a moment.
+2026-06-25 10:40:28,935 - telegram.ext.Application - INFO - Application.stop() complete
+[MCP] Filesystem server not found at expected path.
+[MCP] Skipping Playwright MCP as it is not supported on Android.
+Friday is online and listening...

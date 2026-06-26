@@ -36,7 +36,8 @@ class FridayExecutive:
     def parse_and_execute(self, response_text):
         """
         Looks for tool calling and file sending patterns in the AI's response.
-        Patterns: 
+        Processes ALL tool calls FIRST (to create files), then handles file sending.
+        Patterns:
         - [TOOL: function_name("arg1", "arg2")]
         - [SEND_FILE: path]
         """
@@ -45,78 +46,90 @@ class FridayExecutive:
         import shutil
         import ast
         import json
-        
-        # 1. Handle [SEND_FILE: path]
-        send_file_pattern = r"\[SEND_FILE:\s*(.*?)\]"
-        send_match = re.search(send_file_pattern, response_text)
-        if send_match:
-            file_path = send_match.group(1).strip()
-            # Clean up quotes
-            if (file_path.startswith('"') and file_path.endswith('"')) or \
-               (file_path.startswith("'") and file_path.endswith("'")):
-                file_path = file_path[1:-1]
-            
-            workspace_dir = os.path.abspath("workspace")
-            os.makedirs(workspace_dir, exist_ok=True)
-            
-            if os.path.exists(file_path):
-                filename = os.path.basename(file_path)
-                dest_path = os.path.join(workspace_dir, filename)
-                
-                try:
-                    # If it's not already in the workspace, copy it there
-                    if os.path.abspath(file_path) != os.path.abspath(dest_path):
-                        shutil.copy2(file_path, dest_path)
-                    
-                    file_size = os.path.getsize(dest_path)
-                    download_url = f"/download/{filename}"
-                    
-                    # Log to Supabase automatically
-                    self.supabase.log_file(filename, dest_path, file_size, download_url)
-                    
-                    clean_text = re.sub(send_file_pattern, f"\n[File ready for download: {filename}]", response_text)
-                    return clean_text, True, {"type": "file", "filename": filename, "url": download_url}
-                except Exception as e:
-                    clean_text = re.sub(send_file_pattern, f"\n[Error preparing file: {e}]", response_text)
-                    return clean_text, True, None
-            else:
-                clean_text = re.sub(send_file_pattern, f"\n[Error: File not found at {file_path}]", response_text)
-                return clean_text, True, None
 
-        # 2. Handle [TOOL: function_name(args)]
-        tool_pattern = r"\[TOOL:\s*(\w+)\((.*?)\)\]"
-        match = re.search(tool_pattern, response_text)
-        
-        if match:
+        result_text = response_text
+        tool_used = False
+        metadata = None
+
+        # 1. Process ALL [TOOL: ...] or **TOOL: ...** tags first (they create files, run commands, etc.)
+        tool_pattern = r"(?:\[TOOL:|\*\*TOOL:)\s*(\w+)\((.*?)\)(?:\]|\*\*)"
+
+        def replace_tool(match):
+            nonlocal tool_used
             tool_name = match.group(1)
             raw_args = match.group(2).strip()
-            
+
             args = None
             if raw_args:
-                # Try to parse as JSON first
                 if raw_args.startswith("{") and raw_args.endswith("}"):
                     try:
                         args = json.loads(raw_args)
                     except:
                         pass
-                
-                # If not JSON or JSON failed, try ast.literal_eval for Python-style args
                 if args is None:
                     try:
-                        # Wrap in tuple if it contains commas but isn't already a list/dict
                         if "," in raw_args and not (raw_args.startswith("[") or raw_args.startswith("{")):
                             args = ast.literal_eval(f"({raw_args})")
                         else:
                             args = ast.literal_eval(raw_args)
-                    except Exception as e:
-                        # Fallback to raw string if it's just a simple string without quotes
-                        args = raw_args
-                
+                    except Exception:
+                        # Handle multiline strings with actual newlines
+                        if '\n' in raw_args:
+                            try:
+                                args = ast.literal_eval(raw_args.replace('\n', '\\n'))
+                            except:
+                                args = raw_args
+                        else:
+                            args = raw_args
+
             result = self.handle_tool_call(tool_name, args)
-            
-            # Clean up the response text by removing the tool call tag
-            clean_text = re.sub(tool_pattern, f"\n[Executed {tool_name}: {result}]", response_text)
-            return clean_text, True, None
-            
-        return response_text, False, None
+            tool_used = True
+            return f"\n[Executed {tool_name}: {result}]"
+
+        result_text = re.sub(tool_pattern, replace_tool, result_text, flags=re.DOTALL)
+
+        # 2. Process ALL [SEND_FILE: path] or **SEND_FILE: path** tags after (files should now exist)
+        send_file_pattern = r"(?:\[SEND_FILE:|\*\*SEND_FILE:)\s*(.*?)(?:\]|\*\*)"
+        temp_dir = os.path.abspath("temp")
+        os.makedirs(temp_dir, exist_ok=True)
+
+        def replace_send_file(match):
+            nonlocal tool_used, metadata
+            file_path = match.group(1).strip()
+            if (file_path.startswith('"') and file_path.endswith('"')) or \
+               (file_path.startswith("'") and file_path.endswith("'")):
+                file_path = file_path[1:-1]
+
+            if os.path.exists(file_path):
+                filename = os.path.basename(file_path)
+                # Keep a local copy in temp/ for sending via Telegram
+                local_path = os.path.join(temp_dir, filename)
+                if os.path.abspath(file_path) != os.path.abspath(local_path):
+                    shutil.copy2(file_path, local_path)
+                else:
+                    local_path = file_path
+
+                file_size = os.path.getsize(local_path)
+
+                # Upload to Supabase Storage silently (for persistence, not exposed to user)
+                try:
+                    public_url = self.supabase.upload_file(local_path, bucket="friday-files")
+                    self.supabase.log_file(filename, local_path, file_size, public_url or "")
+                except Exception:
+                    pass
+
+                tool_used = True
+                metadata = {
+                    "type": "file",
+                    "filename": filename,
+                    "filepath": local_path
+                }
+                # Return a marker with local path only — never expose URLs
+                return f"\n[SEND_FILE_NOW: {local_path}]"
+            else:
+                return f"\n[Error: File not found at {file_path}]"
+
+        result_text = re.sub(send_file_pattern, replace_send_file, result_text, flags=re.DOTALL)
+
+        return result_text, tool_used, metadata
 
