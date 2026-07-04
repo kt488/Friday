@@ -94,6 +94,27 @@ class SystemTools:
         except Exception:
             return "Error: Termux-API not installed or telephony permissions missing."
 
+    @staticmethod
+    def save_lead(website_slug, name="", email="", phone="", message="", metadata=None):
+        """Captures a lead for a website chatbot."""
+        from core.database import Database
+        try:
+            db = Database()
+            site = db.get_website(website_slug)
+            if not site:
+                return f"Error: Website '{website_slug}' not found."
+            lead_id = db.save_lead(
+                website_id=site["id"],
+                name=name,
+                email=email,
+                phone=phone,
+                message=message,
+                metadata=metadata
+            )
+            return f"Lead saved successfully (ID: {lead_id})."
+        except Exception as e:
+            return f"Error saving lead: {e}"
+
 def get_tool_map():
     """Returns a map of tool names to their functions."""
     system_tools = {
@@ -104,7 +125,8 @@ def get_tool_map():
         "create_file": SystemTools.create_file,
         "create_zip": SystemTools.create_zip,
         "modify_friday_code": SystemTools.modify_friday_code,
-        "make_call": SystemTools.make_call
+        "make_call": SystemTools.make_call,
+        "save_lead": SystemTools.save_lead
     }
     system_tools.update(get_web_tool_map())
     return system_tools

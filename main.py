@@ -160,7 +160,7 @@ def cmd_api(args):
     cli.system(f"Starting API server on {proto}://{args.host}:{args.port}")
     cli.info(f"Debug: {'ON' if args.debug else 'OFF'}")
     cli.info(f"SSL: {'Enabled' if ssl_ctx else 'Disabled'}")
-    cli.loading(steps=5, label="BOOTING")
+    cli.system("Booting API server...")
     cli.success("API server is running.")
     app.run(host=args.host, port=args.port, debug=args.debug, ssl_context=ssl_ctx)
 
@@ -285,6 +285,51 @@ def cmd_system(args):
     )
 
 
+# ── Keys ──
+
+def cmd_keys(args):
+    """Manage API keys."""
+    from core.saas import SaaSService
+    saas = SaaSService()
+
+    if args.action == "create":
+        full_key, display = saas.keys.generate_key(
+            user_id=args.user_id,
+            label=args.label or "Default",
+        )
+        print("Generated API Key:")
+        print(f"  Full Key: {full_key}")
+        print(f"  ID:       {display['id']}")
+        print(f"  Prefix:   {display['key_prefix']}")
+        print(f"  Label:    {display['label']}")
+        print()
+        print("IMPORTANT: Save this key now. It will not be shown again.")
+
+    elif args.action == "list":
+        keys = saas.keys.list_keys(args.user_id)
+        if not keys:
+            print(f"No API keys found for user {args.user_id}.")
+            return
+        print(f"API Keys for user {args.user_id}:")
+        print(f"{'ID':<5} {'Prefix':<30} {'Label':<20} {'Revoked':<10}")
+        print("-" * 65)
+        for k in keys:
+            revoked = "Yes" if k["is_revoked"] else "No"
+            print(f"{k['id']:<5} {k['key_prefix']:<30} {k['label']:<20} {revoked:<10}")
+
+    elif args.action == "revoke":
+        saas.keys.revoke_key(args.key_id)
+        print(f"API key {args.key_id} revoked.")
+
+    elif args.action == "user-list":
+        users = saas.db.list_users()
+        print("Users:")
+        print(f"{'ID':<5} {'Email':<30} {'Name':<20} {'Role':<10}")
+        print("-" * 65)
+        for u in users:
+            print(f"{u['id']:<5} {u['email']:<30} {u['name']:<20} {u['role']:<10}")
+
+
 # ── Main CLI parser ──
 
 def main():
@@ -344,6 +389,26 @@ def main():
     # ── system ──
     p_system = subparsers.add_parser("system", help="Show system information and status")
     p_system.set_defaults(func=cmd_system)
+
+    # ── keys ──
+    p_keys = subparsers.add_parser("keys", help="Manage API keys")
+    p_keys_sub = p_keys.add_subparsers(dest="action", required=True)
+
+    p_keys_create = p_keys_sub.add_parser("create", help="Create a new API key")
+    p_keys_create.add_argument("--user-id", type=int, default=1, help="User ID (default: 1)")
+    p_keys_create.add_argument("--label", default="CLI Key", help="Label for the key")
+    p_keys_create.set_defaults(func=cmd_keys)
+
+    p_keys_list = p_keys_sub.add_parser("list", help="List API keys for a user")
+    p_keys_list.add_argument("--user-id", type=int, default=1, help="User ID (default: 1)")
+    p_keys_list.set_defaults(func=cmd_keys)
+
+    p_keys_revoke = p_keys_sub.add_parser("revoke", help="Revoke an API key")
+    p_keys_revoke.add_argument("key_id", type=int, help="Key ID to revoke")
+    p_keys_revoke.set_defaults(func=cmd_keys)
+
+    p_keys_users = p_keys_sub.add_parser("user-list", help="List all registered users")
+    p_keys_users.set_defaults(func=cmd_keys)
 
     args = parser.parse_args()
 

@@ -25,6 +25,11 @@ class Config:
     TEMP_DIR = os.path.abspath("temp")
     AGENTS_DIR = os.path.abspath("agents")
     
+    # JWT Settings (used by SaaS auth)
+    FRIDAY_JWT_SECRET = os.getenv("FRIDAY_JWT_SECRET", "")
+    FRIDAY_JWT_EXPIRY = int(os.getenv("FRIDAY_JWT_EXPIRY", "72"))
+    FRIDAY_JWT_ALGORITHM = "HS256"
+
     # App Settings
     APP_NAME = "Friday Assistant"
     REFERER = "https://github.com/friday-assistant"

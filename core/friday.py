@@ -123,3 +123,60 @@ class FridayCore:
         """Delete all conversation history from the local database."""
         self.db.clear_conversations()
         return True
+
+    def process_website_message_stream(self, slug, user_text, session_id, image_path=None):
+        """Streaming pipeline for a tenant website's chatbot.
+
+        Uses the website's persona/business-info to build the system prompt
+        and saves messages scoped to the website + session.
+        """
+        site = self.tenants.get(slug)
+        if not site:
+            yield "[Error: Website not found]"
+            return
+
+        website_id = site["id"]
+        system_prompt = self.tenants.build_system_prompt(slug)
+
+        # Load MCP tools description
+        mcp_desc = self.executive.mcp.get_all_tools_description()
+
+        # Save user message scoped to website session
+        self.db.save_website_message(website_id, session_id, "user", user_text)
+
+        # Stream from brain with website system prompt
+        full_response = ""
+        for chunk in self.brain.generate_stream(
+            user_text,
+            image_path=image_path,
+            history=[],  # website sessions don't use main conversation history
+            extra_tools=mcp_desc,
+            agent_prompt=system_prompt,
+            system_prompt_override=system_prompt
+        ):
+            full_response += chunk
+            yield chunk
+
+        # Post-process: execute tools and handle file delivery
+        processed, tool_used, metadata = self.executive.parse_and_execute(full_response)
+
+        # Yield extra tool execution markers
+        if processed != full_response:
+            extra = processed[len(full_response):]
+            if extra.strip():
+                yield extra
+
+        # Save final response
+        save_text = re.sub(r'(?:\[TOOL:|\*\*TOOL:).*?(?:\]|\*\*)', '', processed, flags=re.DOTALL)
+        save_text = re.sub(r'(?:\[SEND_FILE_NOW:|\*\*SEND_FILE_NOW:).*?(?:\]|\*\*)', '', save_text, flags=re.DOTALL)
+        save_text = re.sub(r'(?:\[Executed|\*\*\[?Executed).*?(?:\]|\*\*)', '', save_text, flags=re.DOTALL)
+        save_text = save_text.strip()
+        if save_text:
+            self.db.save_website_message(website_id, session_id, "assistant", save_text)
+
+    def process_website_message(self, slug, user_text, session_id, image_path=None):
+        """Non-streaming wrapper for website-scoped chat."""
+        full = ""
+        for chunk in self.process_website_message_stream(slug, user_text, session_id, image_path=image_path):
+            full += chunk
+        return full

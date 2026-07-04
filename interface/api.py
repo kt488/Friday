@@ -8,6 +8,7 @@ import sys
 import json
 import re
 import time
+import uuid
 from functools import wraps
 from datetime import datetime
 
@@ -22,11 +23,15 @@ from dotenv import load_dotenv
 
 from core.friday import FridayCore
 from core.config import Config
+from core.saas import SaaSService
+from interface.universal_api import bp as universal_api_bp
 
 load_dotenv()
 
 app = Flask(__name__)
+app.register_blueprint(universal_api_bp)
 friday = FridayCore()
+saas = SaaSService()
 
 TEMP_DIR = Config.TEMP_DIR
 os.makedirs(TEMP_DIR, exist_ok=True)
@@ -165,6 +170,95 @@ def chat_stream():
         data: {"text": "<next chunk>"}
         ...
         data: {"done": true}
+    """
+    data = request.json or {}
+    message = data.get("message", "")
+    image_path = data.get("image_path")
+    agent = data.get("agent")
+
+    if not message and not image_path:
+        return jsonify({"error": "message or image_path required"}), 400
+
+    previous_agent = friday._active_agent
+    if agent:
+        friday._active_agent = agent
+
+    def generate():
+        try:
+            for chunk in friday.process_message_stream(message, image_path=image_path):
+                cleaned = strip_markers(chunk)
+                if cleaned:
+                    yield f"data: {json.dumps({'text': cleaned})}\n\n"
+            yield f"data: {json.dumps({'done': True})}\n\n"
+        finally:
+            if agent:
+                friday._active_agent = previous_agent
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        }
+    )
+
+
+# ══════════════════════════════════════════════════════════════
+# SaaS v2 Chat (gateway-protected)
+# ══════════════════════════════════════════════════════════════
+
+
+@app.route("/api/v2/chat", methods=["POST"])
+@saas.gateway.require_key
+def chat_v2(user_id, plan_limits):
+    """Gateway-protected AI chat endpoint (API key auth via SaaS).
+
+    Requires ``Authorization: Bearer frd_live_xxxxx`` header.
+    Injects ``user_id`` and ``plan_limits`` from the API gateway.
+
+    Request body (JSON):
+      message:    str (required unless image_path set)
+      image_path: str (optional)
+      agent:      str (optional)
+
+    Returns: { response, model, plan, usage }
+    """
+    data = request.json or {}
+    message = data.get("message", "")
+    image_path = data.get("image_path")
+    agent = data.get("agent")
+
+    if not message and not image_path:
+        return jsonify({"error": "message or image_path required"}), 400
+
+    previous_agent = friday._active_agent
+    if agent:
+        friday._active_agent = agent
+
+    try:
+        full_response, metadata = friday.process_message(message, image_path=image_path)
+    finally:
+        if agent:
+            friday._active_agent = previous_agent
+
+    cleaned = strip_markers(full_response)
+
+    return jsonify({
+        "response": cleaned,
+        "model": Config.PRIMARY_MODEL,
+        "plan": plan_limits.get("name", "unknown"),
+        "usage": metadata,
+    })
+
+
+@app.route("/api/v2/chat/stream", methods=["POST"])
+@saas.gateway.require_key
+def chat_v2_stream(user_id, plan_limits):
+    """Gateway-protected streaming chat endpoint (API key auth).
+
+    Returns SSE events like /api/v1/chat/stream.
     """
     data = request.json or {}
     message = data.get("message", "")
@@ -438,6 +532,349 @@ def execute_tool():
 
 
 # ══════════════════════════════════════════════════════════════
+# SaaS Auth
+# ══════════════════════════════════════════════════════════════
+
+
+@app.route("/api/v1/auth/register", methods=["POST"])
+def auth_register():
+    """Register a new user account.
+
+    Body (JSON): { "email": "...", "password": "...", "name": "..." }
+    """
+    data = request.json or {}
+    email = data.get("email", "")
+    password = data.get("password", "")
+    name = data.get("name", "")
+
+    success, msg, result = saas.auth.register(email, password, name)
+    status = 201 if success else 400
+    resp = {"message": msg}
+    if result:
+        resp["data"] = result
+    return jsonify(resp), status
+
+
+@app.route("/api/v1/auth/login", methods=["POST"])
+def auth_login():
+    """Authenticate with email + password, receive JWT.
+
+    Body (JSON): { "email": "...", "password": "..." }
+    """
+    data = request.json or {}
+    email = data.get("email", "")
+    password = data.get("password", "")
+
+    success, msg, result = saas.auth.login(email, password)
+    if not success:
+        return jsonify({"error": msg}), 401
+    return jsonify({"message": msg, "data": result})
+
+
+@app.route("/api/v1/auth/refresh", methods=["POST"])
+def auth_refresh():
+    """Exchange a refresh token for a new JWT.
+
+    Body (JSON): { "refresh_token": "..." }
+    """
+    data = request.json or {}
+    token = data.get("refresh_token", "")
+    if not token:
+        return jsonify({"error": "refresh_token required"}), 400
+
+    new_token = saas.auth.refresh_token(token)
+    if not new_token:
+        return jsonify({"error": "Invalid or expired refresh token"}), 401
+    return jsonify({"token": new_token})
+
+
+@app.route("/api/v1/auth/verify-email", methods=["POST"])
+def auth_verify_email():
+    """Verify email address with a token.
+
+    Body (JSON): { "token": "..." }
+    """
+    data = request.json or {}
+    token = data.get("token", "")
+    if not token:
+        return jsonify({"error": "token required"}), 400
+
+    success, msg = saas.auth.verify_email(token)
+    status = 200 if success else 400
+    return jsonify({"message": msg}), status
+
+
+@app.route("/api/v1/auth/reset-password", methods=["POST"])
+def auth_reset_password():
+    """Request a password reset token (sent to email).
+
+    Body (JSON): { "email": "..." }
+    """
+    data = request.json or {}
+    email = data.get("email", "")
+    if not email:
+        return jsonify({"error": "email required"}), 400
+
+    token = saas.auth.generate_reset_token(email)
+    # In production, send via email. Return token for development.
+    return jsonify({"message": "If email exists, reset token sent", "token": token})
+
+
+@app.route("/api/v1/auth/reset-password/confirm", methods=["POST"])
+def auth_reset_password_confirm():
+    """Reset password using a reset token.
+
+    Body (JSON): { "token": "...", "new_password": "..." }
+    """
+    data = request.json or {}
+    token = data.get("token", "")
+    new_password = data.get("new_password", "")
+    if not token or not new_password:
+        return jsonify({"error": "token and new_password required"}), 400
+
+    success, msg = saas.auth.reset_password(token, new_password)
+    status = 200 if success else 400
+    return jsonify({"message": msg}), status
+
+
+@app.route("/api/v1/auth/profile", methods=["GET"])
+@saas.gateway.require_jwt
+def auth_profile(user_id, plan_limits, role):
+    """Get the authenticated user's profile + subscription info."""
+    profile = saas.auth.get_profile(user_id)
+    if not profile:
+        return jsonify({"error": "User not found"}), 404
+    return jsonify({"profile": profile})
+
+
+# ══════════════════════════════════════════════════════════════
+# SaaS Plans & Subscriptions
+# ══════════════════════════════════════════════════════════════
+
+
+@app.route("/api/v1/plans", methods=["GET"])
+def list_plans():
+    """List all available subscription plans with pricing."""
+    plans = saas.list_plans()
+    return jsonify({"plans": plans, "count": len(plans)})
+
+
+@app.route("/api/v1/plans/<plan_id>", methods=["GET"])
+def get_plan(plan_id):
+    """Get details for a specific plan."""
+    plan = saas.get_plan(plan_id)
+    if not plan:
+        return jsonify({"error": f"Plan '{plan_id}' not found"}), 404
+    return jsonify({"plan": plan})
+
+
+@app.route("/api/v1/subscription", methods=["GET"])
+@saas.gateway.require_jwt
+def get_subscription(user_id, plan_limits, role):
+    """Get the current user's subscription details."""
+    sub = saas.db.get_subscription(user_id)
+    if not sub:
+        return jsonify({"plan_id": "free", "status": "active"})
+    return jsonify({"subscription": sub})
+
+
+@app.route("/api/v1/subscription/subscribe", methods=["POST"])
+@saas.gateway.require_jwt
+def subscribe(user_id, plan_limits, role):
+    """Subscribe (or upgrade) to a plan.
+
+    Body (JSON):
+      plan_id:        str (required)
+      billing_period: str ("monthly" | "yearly", default "monthly")
+    """
+    data = request.json or {}
+    plan_id = data.get("plan_id", "")
+    billing_period = data.get("billing_period", "monthly")
+
+    if not plan_id:
+        return jsonify({"error": "plan_id required"}), 400
+
+    success, msg, result = saas.subscriptions.subscribe(
+        user_id, plan_id, billing_period=billing_period,
+    )
+    status = 200 if success else 400
+    resp = {"message": msg}
+    if result:
+        resp["data"] = result
+    return jsonify(resp), status
+
+
+@app.route("/api/v1/subscription/cancel", methods=["POST"])
+@saas.gateway.require_jwt
+def cancel_subscription(user_id, plan_limits, role):
+    """Cancel the current subscription.
+
+    Body (JSON): { "immediately": bool (default false) }
+    """
+    data = request.json or {}
+    immediately = data.get("immediately", False)
+
+    success, msg, result = saas.subscriptions.cancel(user_id, immediately=immediately)
+    status = 200 if success else 400
+    return jsonify({"message": msg}), status
+
+
+@app.route("/api/v1/subscription/change", methods=["POST"])
+@saas.gateway.require_jwt
+def change_plan(user_id, plan_limits, role):
+    """Change to a different plan.
+
+    Body (JSON): { "plan_id": "...", "billing_period": "monthly|yearly" }
+    """
+    data = request.json or {}
+    plan_id = data.get("plan_id", "")
+    billing_period = data.get("billing_period")
+
+    if not plan_id:
+        return jsonify({"error": "plan_id required"}), 400
+
+    success, msg, result = saas.subscriptions.change_plan(
+        user_id, plan_id, billing_period=billing_period,
+    )
+    status = 200 if success else 400
+    resp = {"message": msg}
+    if result:
+        resp["data"] = result
+    return jsonify(resp), status
+
+
+# ══════════════════════════════════════════════════════════════
+# SaaS API Keys
+# ══════════════════════════════════════════════════════════════
+
+
+@app.route("/api/v1/keys", methods=["GET"])
+@saas.gateway.require_jwt
+def list_api_keys(user_id, plan_limits, role):
+    """List all API keys for the authenticated user."""
+    keys = saas.keys.list_keys(user_id)
+    return jsonify({"keys": keys, "count": len(keys)})
+
+
+@app.route("/api/v1/keys", methods=["POST"])
+@saas.gateway.require_jwt
+def create_api_key(user_id, plan_limits, role):
+    """Create a new API key.
+
+    Body (JSON): { "label": "optional label" }
+
+    Returns the full key **once**. It will not be shown again.
+    """
+    data = request.json or {}
+    label = data.get("label", "Default")
+
+    # Check plan limit for max keys
+    max_keys = plan_limits.get("max_api_keys", 1)
+    current_count = saas.keys.get_key_count(user_id)
+    if current_count >= max_keys:
+        return jsonify({
+            "error": f"Plan limit reached ({current_count}/{max_keys} API keys)",
+        }), 429
+
+    full_key, display = saas.keys.generate_key(user_id, label=label)
+    return jsonify({
+        "message": "API key created — save it now, it won't be shown again",
+        "key": full_key,
+        "data": display,
+    }), 201
+
+
+@app.route("/api/v1/keys/<int:key_id>", methods=["DELETE"])
+@saas.gateway.require_jwt
+def revoke_api_key(user_id, plan_limits, role, key_id):
+    """Revoke (delete) an API key."""
+    success = saas.keys.revoke_key(key_id, user_id)
+    if not success:
+        return jsonify({"error": "Key not found or already revoked"}), 404
+    return jsonify({"message": "API key revoked"})
+
+
+@app.route("/api/v1/keys/regenerate", methods=["POST"])
+@saas.gateway.require_jwt
+def regenerate_api_key(user_id, plan_limits, role):
+    """Revoke an old key and create a new one.
+
+    Body (JSON): { "key_id": int, "label": "optional new label" }
+    """
+    data = request.json or {}
+    key_id = data.get("key_id")
+    label = data.get("label")
+
+    if not key_id:
+        return jsonify({"error": "key_id required"}), 400
+
+    full_key, display = saas.keys.regenerate_key(user_id, key_id, label=label)
+    return jsonify({
+        "message": "Key regenerated — save it now, it won't be shown again",
+        "key": full_key,
+        "data": display,
+    })
+
+
+# ══════════════════════════════════════════════════════════════
+# SaaS Usage
+# ══════════════════════════════════════════════════════════════
+
+
+@app.route("/api/v1/usage", methods=["GET"])
+@saas.gateway.require_jwt
+def get_usage(user_id, plan_limits, role):
+    """Get usage report for the authenticated user."""
+    report = saas.usage.get_usage_report(user_id)
+    return jsonify({
+        "usage": report,
+        "plan_limits": plan_limits,
+    })
+
+
+# ══════════════════════════════════════════════════════════════
+# SaaS Admin
+# ══════════════════════════════════════════════════════════════
+
+
+@app.route("/api/v1/admin/users", methods=["GET"])
+@saas.gateway.require_admin
+def admin_list_users(user_id, plan_limits, role):
+    """List all users (admin only)."""
+    users = saas.db.get_all_users()
+    # Strip sensitive fields
+    for u in users:
+        u.pop("password_hash", None)
+        u.pop("verification_token", None)
+        u.pop("reset_token", None)
+        u.pop("reset_token_expires", None)
+    return jsonify({"users": users, "count": len(users)})
+
+
+@app.route("/api/v1/admin/stats", methods=["GET"])
+@saas.gateway.require_admin
+def admin_stats(user_id, plan_limits, role):
+    """Get aggregate platform statistics (admin only)."""
+    stats = saas.usage.get_overall_stats()
+    return jsonify({"stats": stats})
+
+
+@app.route("/api/v1/admin/audit-logs", methods=["GET"])
+@saas.gateway.require_admin
+def admin_audit_logs(user_id, plan_limits, role):
+    """Get audit trail (admin only).
+
+    Query params:
+      limit: int (default 50)
+      user_id: str (optional filter)
+    """
+    limit = request.args.get("limit", 50, type=int)
+    filter_user = request.args.get("user_id")
+    logs = saas.db.get_audit_logs(limit=limit, user_id=filter_user)
+    return jsonify({"audit_logs": logs, "count": len(logs)})
+
+
+# ══════════════════════════════════════════════════════════════
 # Public API (no auth — for website embedding)
 # ══════════════════════════════════════════════════════════════
 
@@ -507,6 +944,242 @@ def public_chat_stream():
 
 
 # ══════════════════════════════════════════════════════════════
+# Websites (multi-tenant chatbot engine)
+# ══════════════════════════════════════════════════════════════
+
+
+@app.route("/api/v1/websites", methods=["GET"])
+@require_auth
+def list_websites():
+    """List all registered websites."""
+    sites = friday.tenants.list_websites()
+    return jsonify({"websites": sites, "count": len(sites)})
+
+
+@app.route("/api/v1/websites", methods=["POST"])
+@require_auth
+def create_website():
+    """Register a new website/tenant.
+
+    Body (JSON):
+      slug:         str (required, URL-safe identifier)
+      name:         str (required, display name)
+      domain:       str (optional)
+      business_info: dict (optional, for persona building)
+      style:        dict (optional, chatbot styling)
+      welcome_msg:  str (optional)
+    """
+    data = request.json or {}
+    slug = data.get("slug", "").strip()
+    name = data.get("name", "").strip()
+    if not slug or not name:
+        return jsonify({"error": "slug and name are required"}), 400
+
+    website_id = friday.tenants.add_website(
+        slug=slug,
+        name=name,
+        domain=data.get("domain"),
+        business_info=data.get("business_info"),
+        style=data.get("style"),
+        welcome_message=data.get("welcome_msg"),
+    )
+    return jsonify({"message": f"Website '{slug}' created", "id": website_id}), 201
+
+
+@app.route("/api/v1/websites/<slug>", methods=["GET"])
+@require_auth
+def get_website(slug):
+    """Get website/tenant details by slug."""
+    site = friday.tenants.get(slug)
+    if not site:
+        return jsonify({"error": f"Website '{slug}' not found"}), 404
+    return jsonify({"website": site})
+
+
+@app.route("/api/v1/websites/<slug>", methods=["PUT"])
+@require_auth
+def update_website(slug):
+    """Update website/tenant configuration.
+
+    Body (JSON): any subset of { name, domain, business_info, style, welcome_msg }
+    """
+    data = request.json or {}
+    fields = {}
+    for key in ("name", "domain", "business_info", "style", "welcome_msg"):
+        if key in data:
+            fields[key] = data[key]
+    if not fields:
+        return jsonify({"error": "No fields to update"}), 400
+
+    friday.tenants.update_website(slug, **fields)
+    return jsonify({"message": f"Website '{slug}' updated"})
+
+
+@app.route("/api/v1/websites/<slug>", methods=["DELETE"])
+@require_auth
+def delete_website(slug):
+    """Delete a website/tenant."""
+    site = friday.tenants.get(slug)
+    if not site:
+        return jsonify({"error": f"Website '{slug}' not found"}), 404
+    friday.tenants.delete_website(slug)
+    return jsonify({"message": f"Website '{slug}' deleted"})
+
+
+# ── Website chat ──
+
+
+@app.route("/api/v1/websites/<slug>/chat", methods=["POST"])
+@require_auth
+def website_chat(slug):
+    """Non-streaming chat with a website's chatbot persona.
+
+    Body (JSON):
+      message:    str (required unless image_path set)
+      image_path: str (optional)
+      session_id: str (optional, auto-generated if omitted)
+    """
+    site = friday.tenants.get(slug)
+    if not site:
+        return jsonify({"error": f"Website '{slug}' not found"}), 404
+
+    data = request.json or {}
+    message = data.get("message", "")
+    image_path = data.get("image_path")
+    session_id = data.get("session_id", uuid.uuid4().hex[:12])
+
+    if not message and not image_path:
+        return jsonify({"error": "message or image_path required"}), 400
+
+    try:
+        response = friday.process_website_message(slug, message, session_id, image_path=image_path)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+    cleaned = strip_markers(response)
+    return jsonify({
+        "response": cleaned,
+        "session_id": session_id,
+        "website": slug,
+    })
+
+
+@app.route("/api/v1/websites/<slug>/chat/stream", methods=["POST"])
+@require_auth
+def website_chat_stream(slug):
+    """Streaming chat with a website's chatbot persona.
+
+    Body (JSON): same as non-streaming website chat.
+    Returns SSE events.
+    """
+    site = friday.tenants.get(slug)
+    if not site:
+        return jsonify({"error": f"Website '{slug}' not found"}), 404
+
+    data = request.json or {}
+    message = data.get("message", "")
+    image_path = data.get("image_path")
+    session_id = data.get("session_id", uuid.uuid4().hex[:12])
+
+    if not message and not image_path:
+        return jsonify({"error": "message or image_path required"}), 400
+
+    def generate():
+        try:
+            for chunk in friday.process_website_message_stream(slug, message, session_id, image_path=image_path):
+                cleaned = strip_markers(chunk)
+                if cleaned:
+                    yield f"data: {json.dumps({'text': cleaned, 'session_id': session_id})}\n\n"
+            yield f"data: {json.dumps({'done': True, 'session_id': session_id})}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        }
+    )
+
+
+# ── Leads ──
+
+
+@app.route("/api/v1/websites/<slug>/leads", methods=["GET"])
+@require_auth
+def list_leads(slug):
+    """List leads captured for a website.
+
+    Query params:
+      status: str (optional, filter by status)
+    """
+    site = friday.tenants.get(slug)
+    if not site:
+        return jsonify({"error": f"Website '{slug}' not found"}), 404
+
+    status_filter = request.args.get("status")
+    rows = friday.db.get_leads(website_id=site["id"], status=status_filter)
+    leads = [
+        {
+            "id": r[0],
+            "website_id": r[1],
+            "name": r[2],
+            "email": r[3],
+            "phone": r[4],
+            "message": r[5],
+            "status": r[6],
+            "metadata": r[7],
+            "created_at": r[8],
+        }
+        for r in rows
+    ]
+    return jsonify({"leads": leads, "count": len(leads)})
+
+
+@app.route("/api/v1/leads/<int:lead_id>/status", methods=["PUT"])
+@require_auth
+def update_lead_status(lead_id):
+    """Update a lead's status.
+
+    Body (JSON): { "status": "new" | "contacted" | "qualified" | "closed" }
+    """
+    data = request.json or {}
+    status = data.get("status", "").strip()
+    if not status:
+        return jsonify({"error": "status required"}), 400
+
+    friday.db.update_lead_status(lead_id, status)
+    return jsonify({"message": f"Lead {lead_id} status updated to '{status}'"})
+
+
+# ── Website conversations ──
+
+
+@app.route("/api/v1/websites/<slug>/conversations/<session_id>", methods=["GET"])
+@require_auth
+def get_website_conversation(slug, session_id):
+    """Retrieve a website's conversation session."""
+    site = friday.tenants.get(slug)
+    if not site:
+        return jsonify({"error": f"Website '{slug}' not found"}), 404
+
+    rows = friday.db.get_website_conversation(site["id"], session_id)
+    conversation = [
+        {"role": r[0], "message": r[1], "timestamp": r[2]}
+        for r in rows
+    ]
+    return jsonify({
+        "website": slug,
+        "session_id": session_id,
+        "conversation": conversation,
+        "count": len(conversation),
+    })
+
+
+# ══════════════════════════════════════════════════════════════
 # Legacy / convenience
 # ══════════════════════════════════════════════════════════════
 
@@ -557,12 +1230,71 @@ def index():
                 "GET /api/v1/system/tools": "List all tools",
                 "POST /api/v1/system/tools/execute": "Execute a tool",
             },
+            "Websites": {
+                "GET /api/v1/websites": "List all websites",
+                "POST /api/v1/websites": "Create a website",
+                "GET /api/v1/websites/<slug>": "Get website details",
+                "PUT /api/v1/websites/<slug>": "Update website",
+                "DELETE /api/v1/websites/<slug>": "Delete website",
+                "POST /api/v1/websites/<slug>/chat": "Website chatbot (non-streaming)",
+                "POST /api/v1/websites/<slug>/chat/stream": "Website chatbot (SSE stream)",
+            },
+            "Leads": {
+                "GET /api/v1/websites/<slug>/leads": "List leads for a website",
+                "PUT /api/v1/leads/<id>/status": "Update lead status",
+            },
+            "Website Conversations": {
+                "GET /api/v1/websites/<slug>/conversations/<session_id>": "Get website conversation",
+            },
             "Public (no auth)": {
                 "POST /api/v1/public/chat": "Public chat (rate-limited)",
                 "POST /api/v1/public/chat/stream": "Public streaming chat",
             },
+            "v3 Universal API": {
+                "GET /api/v3/actions": "List all 45 available actions across 9 categories",
+                "POST /api/v3/command": "Universal command — single endpoint for all actions",
+                "POST /api/v3/command/stream": "Universal SSE streaming (chat:stream, websites:chat/stream)",
+            },
         },
-        "auth": "Bearer token in Authorization header (if FRIDAY_API_KEY is set)",
+            "SaaS Auth": {
+                "POST /api/v1/auth/register": "Register a new user",
+                "POST /api/v1/auth/login": "Login, receive JWT",
+                "POST /api/v1/auth/refresh": "Refresh JWT with refresh token",
+                "POST /api/v1/auth/verify-email": "Verify email with token",
+                "POST /api/v1/auth/reset-password": "Request password reset",
+                "POST /api/v1/auth/reset-password/confirm": "Confirm password reset",
+                "GET /api/v1/auth/profile": "Get profile (JWT required)",
+            },
+            "SaaS Plans & Subscriptions": {
+                "GET /api/v1/plans": "List all plans",
+                "GET /api/v1/plans/<id>": "Get plan details",
+                "GET /api/v1/subscription": "Get my subscription (JWT)",
+                "POST /api/v1/subscription/subscribe": "Subscribe to a plan (JWT)",
+                "POST /api/v1/subscription/cancel": "Cancel subscription (JWT)",
+                "POST /api/v1/subscription/change": "Change plan (JWT)",
+            },
+            "SaaS API Keys": {
+                "GET /api/v1/keys": "List my API keys (JWT)",
+                "POST /api/v1/keys": "Create API key (JWT)",
+                "DELETE /api/v1/keys/<id>": "Revoke API key (JWT)",
+                "POST /api/v1/keys/regenerate": "Regenerate API key (JWT)",
+            },
+            "SaaS Usage": {
+                "GET /api/v1/usage": "Get usage report (JWT)",
+            },
+            "SaaS Admin": {
+                "GET /api/v1/admin/users": "List all users (admin)",
+                "GET /api/v1/admin/stats": "Platform stats (admin)",
+                "GET /api/v1/admin/audit-logs": "Audit trail (admin)",
+            },
+            "SaaS v2 Chat": {
+                "POST /api/v2/chat": "Gateway chat (API key auth)",
+                "POST /api/v2/chat/stream": "Gateway streaming chat (API key auth)",
+            },
+            "SaaS v2 Chat (Telegram)": {
+                "POST /api/v2/chat/telegram": "Gateway chat via Telegram bot (API key auth)",
+            },
+        "auth": "Bearer token in Authorization header (if FRIDAY_API_KEY is set); SaaS uses frd_live_ keys or JWT",
     })
 
 
