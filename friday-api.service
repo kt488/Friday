@@ -1,0 +1,16 @@
+[Unit]
+Description=Friday AI Assistant API
+After=network.target
+
+[Service]
+Type=simple
+User=u0_a117
+WorkingDirectory=/data/data/com.termux/files/home/Friday
+ExecStart=/data/data/com.termux/files/usr/bin/python3 main.py api --port 5000
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
