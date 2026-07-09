@@ -5,7 +5,7 @@ After=network.target
 [Service]
 Type=simple
 User=u0_a117
-WorkingDirectory=/data/data/com.termux/files/home/Friday
+WorkingDirectory=/data/data/com.termux/files/home/fridayweb/Friday
 ExecStart=/data/data/com.termux/files/usr/bin/python3 main.py api --port 5000
 Restart=always
 RestartSec=5

@@ -1,0 +1,31 @@
+# Environment
+.env
+
+# Database
+friday.db
+friday.db-shm
+friday.db-wal
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+venv/
+.venv/
+
+# Logs
+*.log
+bot_stderr.log
+bot_stdout.log
+
+# Temp / workspace
+temp/
+workspace/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Railway
+.railway/

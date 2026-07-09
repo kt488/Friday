@@ -5,8 +5,9 @@ python-telegram-bot
 beautifulsoup4
 rich
 prompt_toolkit
-pyttsx3
 openpyxl
 PyPDF2
 pyjwt
 cryptography
+flask-cors
+gunicorn
