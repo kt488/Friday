@@ -10,4 +10,4 @@ PyPDF2
 pyjwt
 cryptography
 flask-cors
-gunicorn
+gunicorn==22.0.0

@@ -71,7 +71,7 @@ class SystemTools:
     @staticmethod
     def modify_friday_code(file_name, new_content):
         """Allows Friday to rewrite her own source code."""
-        allowed_files = ["main.py", "core/brain.py", "core/config.py", "core/executive.py", "core/friday.py", "interface/telegram_bot.py", "tools/system.py", "tools/web.py"]
+        allowed_files = ["cli.py", "core/brain.py", "core/config.py", "core/executive.py", "core/friday.py", "interface/telegram_bot.py", "tools/system.py", "tools/web.py"]
         try:
             # Basic path normalization
             target = file_name if "/" in file_name else f"core/{file_name}"

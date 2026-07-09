@@ -21,9 +21,18 @@ from flask import Flask, request, jsonify, send_from_directory, Response, stream
 from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
 
-from core.friday import FridayCore
-from core.config import Config
-from core.saas import SaaSService
+try:
+    from core.friday import FridayCore
+except ImportError:
+    FridayCore = None
+try:
+    from core.config import Config
+except ImportError:
+    Config = None
+try:
+    from core.saas import SaaSService
+except ImportError:
+    SaaSService = None
 from interface.universal_api import bp as universal_api_bp
 
 load_dotenv()

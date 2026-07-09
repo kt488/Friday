@@ -57,14 +57,14 @@ else
 fi
 
 # ── Kill existing processes ──
-pkill -f "$PYTHON main.py api" 2>/dev/null || true
+pkill -f "$PYTHON cli.py api" 2>/dev/null || true
 if [ "$MODE" != "vps" ]; then
   pkill -f "cloudflared tunnel" 2>/dev/null || true
 fi
 sleep 1
 
 # ── Start API server ──
-$PYTHON main.py api --host "$HOST" --port "$PORT" $( [ "$DEBUG" = "true" ] && echo "--debug" ) "${SSL_ARGS[@]}" &
+$PYTHON cli.py api --host "$HOST" --port "$PORT" $( [ "$DEBUG" = "true" ] && echo "--debug" ) "${SSL_ARGS[@]}" &
 API_PID=$!
 echo "API server started (PID: $API_PID) on $HOST:$PORT"
 
