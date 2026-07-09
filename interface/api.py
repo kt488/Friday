@@ -30,8 +30,17 @@ load_dotenv()
 
 app = Flask(__name__)
 app.register_blueprint(universal_api_bp)
-friday = FridayCore()
-saas = SaaSService()
+try:
+    friday = FridayCore()
+except Exception as e:
+    print(f"[FATAL] FridayCore() failed: {e}", flush=True)
+    raise
+
+try:
+    saas = SaaSService()
+except Exception as e:
+    print(f"[FATAL] SaaSService() failed: {e}", flush=True)
+    raise
 
 TEMP_DIR = Config.TEMP_DIR
 os.makedirs(TEMP_DIR, exist_ok=True)
