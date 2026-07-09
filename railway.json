@@ -1,5 +1,9 @@
 {
-  "buildCommand": "pip install -r requirements.txt",
-  "startCommand": "bash start.sh",
-  "healthcheckPath": "/status"
+  "build": {
+    "buildCommand": "pip install -r requirements.txt"
+  },
+  "deploy": {
+    "startCommand": "bash start.sh",
+    "healthcheckPath": "/status"
+  }
 }
