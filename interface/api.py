@@ -34,13 +34,13 @@ try:
     friday = FridayCore()
 except Exception as e:
     print(f"[FATAL] FridayCore() failed: {e}", flush=True)
-    raise
+    friday = None
 
 try:
     saas = SaaSService()
 except Exception as e:
     print(f"[FATAL] SaaSService() failed: {e}", flush=True)
-    raise
+    saas = None
 
 TEMP_DIR = Config.TEMP_DIR
 os.makedirs(TEMP_DIR, exist_ok=True)
