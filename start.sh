@@ -10,7 +10,7 @@ echo "[start] Starting Friday services..."
 # ── API (gunicorn) — main process ──
 run_api() {
     echo "[start] Launching API (gunicorn) on port ${PORT:-5000}..."
-    exec gunicorn wsgi:app \
+    exec python3 -m gunicorn wsgi:app \
         --bind "0.0.0.0:${PORT:-5000}" \
         --workers 2 \
         --timeout 120 \
