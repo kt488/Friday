@@ -144,6 +144,7 @@ def _dispatch(action, params, user_id=None, plan_limits=None, role=None):
         message = params.get("message", "")
         image_path = params.get("image_path")
         agent = params.get("agent")
+        conversation_id = params.get("conversation_id")
 
         if not message and not image_path:
             return {"error": "message or image_path required"}, 400
@@ -152,7 +153,11 @@ def _dispatch(action, params, user_id=None, plan_limits=None, role=None):
         if agent:
             friday._active_agent = agent
         try:
-            resp, metadata = friday.process_message(message, image_path=image_path)
+            resp = friday.process_message(
+                message, image_path=image_path,
+                user_id=user_id, conversation_id=conversation_id,
+            )
+            conv_id = conversation_id or friday._last_conversation_id
         finally:
             if agent:
                 friday._active_agent = prev
@@ -160,7 +165,7 @@ def _dispatch(action, params, user_id=None, plan_limits=None, role=None):
         return {
             "response": _strip_markers(resp),
             "model": Config.PRIMARY_MODEL,
-            "metadata": metadata,
+            "conversation_id": conv_id,
             "agent": friday._active_agent,
         }, None
 
@@ -188,7 +193,10 @@ def _dispatch(action, params, user_id=None, plan_limits=None, role=None):
 
     if action == "history:list":
         limit = params.get("limit", 50)
-        rows = friday.db.get_conversation_history(limit=limit)
+        conversation_id = params.get("conversation_id")
+        rows = friday.db.get_conversation_history(
+            user_id=user_id, conversation_id=conversation_id, limit=limit,
+        )
         history = [
             {"role": r["role"], "message": r["message"], "timestamp": r["timestamp"]}
             for r in rows
@@ -196,8 +204,35 @@ def _dispatch(action, params, user_id=None, plan_limits=None, role=None):
         return {"history": history, "count": len(history)}, None
 
     if action == "history:clear":
-        friday.clear_history()
+        conversation_id = params.get("conversation_id")
+        friday.clear_history(user_id=user_id, conversation_id=conversation_id)
         return {"message": "Conversation history cleared"}, None
+
+    # ── Conversations ──────────────────────────────────────
+
+    if action == "conversations:list":
+        rows = friday.db.list_conversations(user_id=user_id)
+        return {"conversations": rows, "count": len(rows)}, None
+
+    if action == "conversations:create":
+        title = params.get("title", "New Chat")
+        conv_id = friday.db.create_conversation(user_id=user_id, title=title)
+        return {"conversation_id": conv_id, "title": title}, None
+
+    if action == "conversations:delete":
+        conversation_id = params.get("conversation_id")
+        if not conversation_id:
+            return {"error": "conversation_id required"}, 400
+        friday.db.delete_conversation(conversation_id, user_id=user_id)
+        return {"message": "Conversation deleted"}, None
+
+    if action == "conversations:rename":
+        conversation_id = params.get("conversation_id")
+        title = params.get("title", "")
+        if not conversation_id or not title:
+            return {"error": "conversation_id and title required"}, 400
+        friday.db.rename_conversation(conversation_id, title, user_id=user_id)
+        return {"message": "Conversation renamed", "title": title}, None
 
     # ── Files ─────────────────────────────────────────────
 
@@ -841,6 +876,7 @@ def command_stream(_user_id, _plan_limits, _role):
                 message = params.get("message", "")
                 image_path = params.get("image_path")
                 agent = params.get("agent")
+                conversation_id = params.get("conversation_id")
 
                 if not message and not image_path:
                     yield f"data: {json.dumps({'event': 'error', 'error': 'message or image_path required'})}\n\n"
@@ -850,7 +886,10 @@ def command_stream(_user_id, _plan_limits, _role):
                 if agent:
                     friday._active_agent = agent
                 try:
-                    for chunk in friday.process_message_stream(message, image_path=image_path):
+                    for chunk in friday.process_message_stream(
+                        message, image_path=image_path,
+                        user_id=_user_id, conversation_id=conversation_id,
+                    ):
                         cleaned = _strip_markers(chunk)
                         if cleaned:
                             yield f"data: {json.dumps({'event': 'chunk', 'text': cleaned})}\n\n"
@@ -886,7 +925,7 @@ def command_stream(_user_id, _plan_limits, _role):
             yield f"data: {json.dumps({'event': 'error', 'error': str(e)})}\n\n"
             return
 
-        yield f"data: {json.dumps({'event': 'done'})}\n\n"
+        yield f"data: {json.dumps({'event': 'done', 'conversation_id': friday._last_conversation_id})}\n\n"
 
     return Response(
         stream_with_context(generate()),
@@ -909,8 +948,12 @@ def list_actions(_user_id, _plan_limits, _role):
         "chat:agent/set": "Set the active agent persona",
         "chat:agent/get": "Get the currently active agent",
         "chat:agent/clear": "Deactivate the current agent",
-        "history:list": "Get conversation history",
-        "history:clear": "Clear all conversation history",
+        "history:list": "Get conversation history (scoped to user + conversation)",
+        "history:clear": "Clear conversation history (scoped to user + conversation)",
+        "conversations:list": "List all conversations for the user",
+        "conversations:create": "Create a new conversation",
+        "conversations:delete": "Delete a conversation",
+        "conversations:rename": "Rename a conversation",
         "files:list": "List uploaded files in temp directory",
         "files:read": "Read a file's content",
         "files:delete": "Delete a file",

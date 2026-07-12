@@ -13,6 +13,7 @@ class FridayCore:
         self.executive = FridayExecutive()
         self.tenants = TenantManager(self.db)
         self._active_agent = None
+        self._last_conversation_id = None
 
     def _extract_agent_tag(self, text):
         """Check for [AGENT: name] or [CLEAR_AGENT] tags in user input.
@@ -32,11 +33,31 @@ class FridayCore:
 
         return text, None
 
-    def process_message_stream(self, user_text, image_path=None):
-        """Core streaming pipeline: load context, stream LLM response,
+    def process_message(self, user_text, image_path=None, user_id=None, conversation_id=None):
+        """Legacy non-streaming process."""
+        full = ""
+        for chunk in self.process_message_stream(user_text, image_path=image_path, user_id=user_id, conversation_id=conversation_id):
+            full += chunk
+        return full
+
+    def process_message_stream(self, user_text, image_path=None, user_id=None, conversation_id=None):
+        """Core streaming pipeline: load user-scoped context, stream LLM response,
         execute tools, yield final output."""
-        # 1. Load conversation history (last 10 messages)
-        history = self.db.get_conversation_history(limit=10)
+        # 1. Validate or auto-create conversation
+        if user_id and not conversation_id:
+            conversation_id = self.db.create_conversation(user_id)
+        elif user_id and conversation_id:
+            # Verify conversation belongs to this user
+            conv = self.db.get_conversation(user_id, conversation_id)
+            if not conv:
+                conversation_id = self.db.create_conversation(user_id)
+        self._last_conversation_id = conversation_id
+
+        # 2. Load conversation history (last 10 messages, scoped to user + conversation)
+        if user_id and conversation_id:
+            history = self.db.get_conversation_history(user_id=user_id, conversation_id=conversation_id, limit=10)
+        else:
+            history = self.db.get_conversation_history(limit=10)  # legacy fallback
 
         # 2. Check for agent tags in user input
         cleaned_text, agent_tag = self._extract_agent_tag(user_text)
@@ -50,9 +71,9 @@ class FridayCore:
             agent_prompt = self.brain.load_agent_prompt(self._active_agent) or ""
 
         # 4. Save user message to both databases
-        self.db.save_message("user", user_input)
+        self.db.save_message("user", user_input, user_id=user_id, conversation_id=conversation_id)
         try:
-            self.executive.supabase.save_message("user", user_input)
+            self.executive.supabase.save_message("user", user_input, user_id=user_id, conversation_id=conversation_id)
         except Exception:
             pass
 
@@ -87,41 +108,15 @@ class FridayCore:
         save_text = re.sub(r'(?:\[Executed|\*\*\[?Executed).*?(?:\]|\*\*)', '', save_text, flags=re.DOTALL)
         save_text = save_text.strip()
         if save_text:
-            self.db.save_message("friday", save_text)
+            self.db.save_message("friday", save_text, user_id=user_id, conversation_id=conversation_id)
             try:
-                self.executive.supabase.save_message("friday", save_text)
+                self.executive.supabase.save_message("friday", save_text, user_id=user_id, conversation_id=conversation_id)
             except Exception:
                 pass
 
-    def process_message(self, user_text, image_path=None):
-        """Non-streaming wrapper — collects all chunks and returns (response, metadata).
-
-        Metadata is populated when a file is generated (via [SEND_FILE_NOW: path]).
-        """
-        full_response = ""
-        for chunk in self.process_message_stream(user_text, image_path=image_path):
-            full_response += chunk
-
-        # Extract file metadata from SEND_FILE_NOW markers
-        metadata = None
-        file_match = re.search(r'\[SEND_FILE_NOW:\s*(.*?)\]', full_response)
-        if file_match:
-            file_path = file_match.group(1).strip()
-            if (file_path.startswith('"') and file_path.endswith('"')) or \
-               (file_path.startswith("'") and file_path.endswith("'")):
-                file_path = file_path[1:-1]
-            if os.path.exists(file_path):
-                metadata = {
-                    "type": "file",
-                    "filename": os.path.basename(file_path),
-                    "filepath": file_path
-                }
-
-        return full_response, metadata
-
-    def clear_history(self):
-        """Delete all conversation history from the local database."""
-        self.db.clear_conversations()
+    def clear_history(self, user_id=None, conversation_id=None):
+        """Delete conversation history scoped to user + conversation."""
+        self.db.clear_conversation_history(user_id=user_id, conversation_id=conversation_id)
         return True
 
     def process_website_message_stream(self, slug, user_text, session_id, image_path=None):

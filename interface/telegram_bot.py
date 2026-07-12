@@ -55,7 +55,9 @@ async def process_and_respond(update: Update, context: ContextTypes.DEFAULT_TYPE
     update_interval = 0.8
     
     try:
-        for chunk in friday.process_message_stream(user_text, image_path=image_path):
+        # Use chat_id as user_id for per-Telegram-chat isolation
+        user_id = str(chat_id)
+        for chunk in friday.process_message_stream(user_text, image_path=image_path, user_id=user_id):
             full_text += chunk
             
             # Update message if interval has passed
