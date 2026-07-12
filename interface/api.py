@@ -8,6 +8,7 @@ import sys
 import json
 import re
 import time
+import logging
 import uuid
 from functools import wraps
 from datetime import datetime
@@ -103,6 +104,30 @@ def require_auth(f):
     return decorated
 
 
+# ── Logging ──
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(name)s %(message)s')
+logger = logging.getLogger(__name__)
+
+
+# ── User ID extraction ──
+
+
+def _get_user_id():
+    """Extract user_id from JWT in Authorization header.
+
+    Returns the authenticated user's ID from the JWT token.
+    Falls back to 'default' if no valid JWT is present (legacy API key auth).
+    """
+    if saas is None or saas.auth is None:
+        return "default"
+    auth_header = request.headers.get("Authorization", "")
+    user_id, role = saas.auth.authenticate_request(auth_header)
+    if user_id:
+        return user_id
+    return "default"
+
+
 # ── CORS helpers ──
 
 @app.after_request
@@ -156,8 +181,8 @@ def chat():
     if not message and not image_path:
         return jsonify({"error": "message or image_path required"}), 400
 
-    # v1 uses a fixed user_id since auth is a global API key
-    user_id = "default"
+    user_id = _get_user_id()
+    logger.info(f"[v1/chat] user_id={user_id}, conversation_id={conversation_id}, message_len={len(message)}")
 
     # Temporarily activate agent if specified
     previous_agent = friday._active_agent
@@ -172,8 +197,11 @@ def chat():
 
     cleaned = strip_markers(full_response)
 
+    logger.info(f"[v1/chat] response_len={len(cleaned)}, conversation_id={conversation_id or friday._last_conversation_id}")
     return jsonify({
         "response": cleaned,
+        "reply": cleaned,
+        "timestamp": datetime.utcnow().isoformat(),
         "model": Config.PRIMARY_MODEL,
         "metadata": metadata,
         "agent": friday._active_agent,
@@ -204,7 +232,8 @@ def chat_stream():
     if not message and not image_path:
         return jsonify({"error": "message or image_path required"}), 400
 
-    user_id = "default"
+    user_id = _get_user_id()
+    logger.info(f"[v1/chat/stream] user_id={user_id}, conversation_id={conversation_id}, message_len={len(message)}")
 
     previous_agent = friday._active_agent
     if agent:
@@ -341,8 +370,7 @@ def get_history():
     limit = request.args.get("limit", 50, type=int)
     conversation_id = request.args.get("conversation_id")
 
-    # v1 uses "default" user_id
-    user_id = "default"
+    user_id = _get_user_id()
 
     rows = friday.db.get_conversation_history(user_id=user_id, conversation_id=conversation_id, limit=limit)
     # Convert to list of dicts for easier consumption
@@ -363,7 +391,7 @@ def clear_history():
     """
     data = request.json or {}
     conversation_id = data.get("conversation_id")
-    user_id = "default"
+    user_id = _get_user_id()
     friday.clear_history(user_id=user_id, conversation_id=conversation_id)
     msg = f"Conversation {'conversation_id=' + conversation_id + ' ' if conversation_id else ''}history cleared"
     return jsonify({"message": msg})
@@ -1011,7 +1039,7 @@ def list_conversations():
       limit: int (default 50)
     """
     limit = request.args.get("limit", 50, type=int)
-    user_id = "default"
+    user_id = _get_user_id()
     conversations = friday.db.list_conversations(user_id, limit=limit)
     return jsonify({"conversations": conversations, "count": len(conversations)})
 
@@ -1026,7 +1054,7 @@ def create_conversation():
     """
     data = request.json or {}
     title = data.get("title", "New conversation")
-    user_id = "default"
+    user_id = _get_user_id()
     conv_id = friday.db.create_conversation(user_id, title=title)
     return jsonify({"conversation_id": conv_id, "title": title}), 201
 
@@ -1035,7 +1063,7 @@ def create_conversation():
 @require_auth
 def delete_conversation(conversation_id):
     """Delete a conversation and all its messages."""
-    user_id = "default"
+    user_id = _get_user_id()
     friday.db.delete_conversation(user_id, conversation_id)
     return jsonify({"message": f"Conversation {conversation_id} deleted"})
 
@@ -1052,7 +1080,123 @@ def rename_conversation(conversation_id):
     title = data.get("title")
     if not title:
         return jsonify({"error": "title required"}), 400
-    user_id = "default"
+    user_id = _get_user_id()
+    friday.db.rename_conversation(user_id, conversation_id, title)
+    return jsonify({"conversation_id": conversation_id, "title": title})
+
+
+# ══════════════════════════════════════════════════════════════
+# Frontend-compatible API routes (for Friday Web/PWA — /api/*)
+# ══════════════════════════════════════════════════════════════
+
+
+@app.route("/api/chat", methods=["POST"])
+@require_auth
+def api_chat():
+    """Frontend chat endpoint — returns frontend-compatible response format (reply, timestamp, conversation_id)."""
+    data = request.json or {}
+    message = data.get("message", "")
+    image_path = data.get("image_path")
+    agent = data.get("agent")
+    conversation_id = data.get("conversation_id")
+
+    if not message and not image_path:
+        return jsonify({"error": "message or image_path required"}), 400
+
+    user_id = _get_user_id()
+    logger.info(f"[api/chat] user_id={user_id}, conversation_id={conversation_id}, message_len={len(message)}")
+
+    previous_agent = friday._active_agent
+    if agent:
+        friday._active_agent = agent
+
+    try:
+        full_response, metadata = friday.process_message(
+            message, image_path=image_path, user_id=user_id, conversation_id=conversation_id
+        )
+    finally:
+        if agent:
+            friday._active_agent = previous_agent
+
+    cleaned = strip_markers(full_response)
+    conv_id = conversation_id or friday._last_conversation_id
+    logger.info(f"[api/chat] response_len={len(cleaned)}, conversation_id={conv_id}")
+
+    return jsonify({
+        "reply": cleaned,
+        "timestamp": datetime.utcnow().isoformat(),
+        "conversation_id": conv_id,
+    })
+
+
+@app.route("/api/conversations", methods=["GET"])
+@require_auth
+def api_list_conversations():
+    """Frontend: list conversations with nested response format."""
+    limit = request.args.get("limit", 50, type=int)
+    user_id = _get_user_id()
+    conversations = friday.db.list_conversations(user_id, limit=limit)
+    return jsonify({"conversations": conversations, "count": len(conversations)})
+
+
+@app.route("/api/conversations", methods=["POST"])
+@require_auth
+def api_create_conversation():
+    """Frontend: create conversation with nested conversation object."""
+    data = request.json or {}
+    title = data.get("title", "New Chat")
+    user_id = _get_user_id()
+    conv_id = friday.db.create_conversation(user_id, title=title)
+    conv = friday.db.get_conversation(user_id, conv_id) or {
+        "id": conv_id,
+        "title": title,
+        "created_at": datetime.utcnow().isoformat(),
+        "updated_at": datetime.utcnow().isoformat(),
+    }
+    return jsonify({"conversation": conv}), 201
+
+
+@app.route("/api/conversations/<conversation_id>/messages", methods=["GET"])
+@require_auth
+def api_get_conversation_messages(conversation_id):
+    """Frontend: get messages for a conversation.
+
+    Returns messages in frontend-compatible format:
+    { messages: [{ id, text, sender, timestamp, conversationId }] }
+    """
+    user_id = _get_user_id()
+    rows = friday.db.get_conversation_history(user_id=user_id, conversation_id=conversation_id)
+    messages = []
+    for i, row in enumerate(rows):
+        role, message, timestamp = row[0], row[1], row[2]
+        messages.append({
+            "id": f"{conversation_id}-{i}",
+            "text": message,
+            "sender": "user" if role == "user" else "bot",
+            "timestamp": timestamp,
+            "conversationId": conversation_id,
+        })
+    return jsonify({"messages": messages, "count": len(messages)})
+
+
+@app.route("/api/conversations/<conversation_id>", methods=["DELETE"])
+@require_auth
+def api_delete_conversation(conversation_id):
+    """Frontend: delete a conversation."""
+    user_id = _get_user_id()
+    friday.db.delete_conversation(user_id, conversation_id)
+    return jsonify({"message": f"Conversation {conversation_id} deleted"})
+
+
+@app.route("/api/conversations/<conversation_id>", methods=["PATCH"])
+@require_auth
+def api_rename_conversation(conversation_id):
+    """Frontend: rename a conversation."""
+    data = request.json or {}
+    title = data.get("title")
+    if not title:
+        return jsonify({"error": "title required"}), 400
+    user_id = _get_user_id()
     friday.db.rename_conversation(user_id, conversation_id, title)
     return jsonify({"conversation_id": conversation_id, "title": title})
 
