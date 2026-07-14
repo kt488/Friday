@@ -152,7 +152,6 @@ def _dispatch(action, params, user_id=None, plan_limits=None, role=None):
         try:
             resp = friday.process_message(
                 message, image_path=image_path,
-                user_id=user_id, conversation_id=conversation_id,
                 agent_name=agent,
             )
         except Exception as e:
@@ -189,29 +188,6 @@ def _dispatch(action, params, user_id=None, plan_limits=None, role=None):
 
     if action == "history:clear":
         return {"message": "Conversation history cleared"}, None
-
-    # ── Conversations ──────────────────────────────────────
-
-    if action == "conversations:list":
-        return {"conversations": [], "count": 0}, None
-
-    if action == "conversations:create":
-        title = params.get("title", "New Chat")
-        conv_id = str(uuid.uuid4())
-        return {"conversation_id": conv_id, "title": title}, None
-
-    if action == "conversations:delete":
-        conversation_id = params.get("conversation_id")
-        if not conversation_id:
-            return {"error": "conversation_id required"}, 400
-        return {"message": "Conversation deleted"}, None
-
-    if action == "conversations:rename":
-        conversation_id = params.get("conversation_id")
-        title = params.get("title", "")
-        if not conversation_id or not title:
-            return {"error": "conversation_id and title required"}, 400
-        return {"message": "Conversation renamed", "title": title}, None
 
     # ── Files ─────────────────────────────────────────────
 
@@ -861,7 +837,6 @@ def command_stream(_user_id, _plan_limits, _role):
 
                 for chunk in friday.process_message_stream(
                         message, image_path=image_path,
-                        user_id=_user_id, conversation_id=conversation_id,
                         agent_name=agent,
                     ):
                         cleaned = _strip_markers(chunk)
@@ -896,7 +871,7 @@ def command_stream(_user_id, _plan_limits, _role):
             yield f"data: {json.dumps({'event': 'error', 'error': str(e)})}\n\n"
             return
 
-        yield f"data: {json.dumps({'event': 'done', 'conversation_id': conversation_id})}\n\n"
+        yield f"data: {json.dumps({'event': 'done'})}\n\n"
 
     return Response(
         stream_with_context(generate()),
@@ -919,12 +894,8 @@ def list_actions(_user_id, _plan_limits, _role):
         "chat:agent/set": "Set the active agent persona",
         "chat:agent/get": "Get the currently active agent",
         "chat:agent/clear": "Deactivate the current agent",
-        "history:list": "Get conversation history (scoped to user + conversation)",
-        "history:clear": "Clear conversation history (scoped to user + conversation)",
-        "conversations:list": "List all conversations for the user",
-        "conversations:create": "Create a new conversation",
-        "conversations:delete": "Delete a conversation",
-        "conversations:rename": "Rename a conversation",
+        "history:list": "Get conversation history",
+        "history:clear": "Clear conversation history",
         "files:list": "List uploaded files in temp directory",
         "files:read": "Read a file's content",
         "files:delete": "Delete a file",

@@ -25,36 +25,6 @@ class Database:
                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
-            # ── New multi-user chat tables ──
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS chat_conversations (
-                    id TEXT PRIMARY KEY,
-                    user_id TEXT NOT NULL,
-                    title TEXT DEFAULT 'New Chat',
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-                )
-            ''')
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS chat_messages (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id TEXT NOT NULL,
-                    conversation_id TEXT NOT NULL,
-                    role TEXT NOT NULL,
-                    message TEXT NOT NULL,
-                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (conversation_id) REFERENCES chat_conversations(id)
-                )
-            ''')
-            cursor.execute('''
-                CREATE INDEX IF NOT EXISTS idx_chat_messages_user_conv
-                ON chat_messages(user_id, conversation_id, timestamp)
-            ''')
-            cursor.execute('''
-                CREATE INDEX IF NOT EXISTS idx_chat_conversations_user
-                ON chat_conversations(user_id, created_at)
-            ''')
-
             # Memory / Preferences table
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS memory (

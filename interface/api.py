@@ -110,24 +110,6 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(na
 logger = logging.getLogger(__name__)
 
 
-# ── User ID extraction ──
-
-
-def _get_user_id():
-    """Extract user_id from JWT in Authorization header.
-
-    Returns the authenticated user's ID from the JWT token.
-    Falls back to 'default' if no valid JWT is present (legacy API key auth).
-    """
-    if saas is None or saas.auth is None:
-        return "default"
-    auth_header = request.headers.get("Authorization", "")
-    user_id, role = saas.auth.authenticate_request(auth_header)
-    if user_id:
-        return user_id
-    return "default"
-
-
 # ── CORS helpers ──
 
 @app.after_request
@@ -181,12 +163,9 @@ def chat():
     if not message and not image_path:
         return jsonify({"error": "message or image_path required"}), 400
 
-    user_id = _get_user_id()
-    logger.info(f"[v1/chat] user_id={user_id}, conversation_id={conversation_id}, message_len={len(message)}")
-
     # Temporarily activate agent if specified
     try:
-        full_response = friday.process_message(message, image_path=image_path, user_id=user_id, conversation_id=conversation_id, agent_name=agent)
+        full_response = friday.process_message(message, image_path=image_path, agent_name=agent)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -225,16 +204,13 @@ def chat_stream():
     if not message and not image_path:
         return jsonify({"error": "message or image_path required"}), 400
 
-    user_id = _get_user_id()
-    logger.info(f"[v1/chat/stream] user_id={user_id}, conversation_id={conversation_id}, message_len={len(message)}")
-
     def generate():
         try:
-            for chunk in friday.process_message_stream(message, image_path=image_path, user_id=user_id, conversation_id=conversation_id, agent_name=agent):
+            for chunk in friday.process_message_stream(message, image_path=image_path, agent_name=agent):
                 cleaned = strip_markers(chunk)
                 if cleaned:
                     yield f"data: {json.dumps({'text': cleaned})}\n\n"
-            yield f"data: {json.dumps({'done': True, 'conversation_id': conversation_id})}\n\n"
+            yield f"data: {json.dumps({'done': True})}\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
 
@@ -280,7 +256,7 @@ def chat_v2(user_id, plan_limits):
         return jsonify({"error": "message or image_path required"}), 400
 
     try:
-        full_response = friday.process_message(message, image_path=image_path, user_id=user_id, conversation_id=conversation_id, agent_name=agent)
+        full_response = friday.process_message(message, image_path=image_path, agent_name=agent)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -312,11 +288,11 @@ def chat_v2_stream(user_id, plan_limits):
 
     def generate():
         try:
-            for chunk in friday.process_message_stream(message, image_path=image_path, user_id=user_id, conversation_id=conversation_id, agent_name=agent):
+            for chunk in friday.process_message_stream(message, image_path=image_path, agent_name=agent):
                 cleaned = strip_markers(chunk)
                 if cleaned:
                     yield f"data: {json.dumps({'text': cleaned})}\n\n"
-            yield f"data: {json.dumps({'done': True, 'conversation_id': conversation_id})}\n\n"
+            yield f"data: {json.dumps({'done': True})}\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
 
@@ -347,8 +323,6 @@ def get_history():
     limit = request.args.get("limit", 50, type=int)
     conversation_id = request.args.get("conversation_id")
 
-    user_id = _get_user_id()
-
     # Stateless: return empty history (conversation context passed per-request)
     return jsonify({"history": [], "count": 0, "conversation_id": conversation_id})
 
@@ -363,7 +337,6 @@ def clear_history():
     """
     data = request.json or {}
     conversation_id = data.get("conversation_id")
-    user_id = _get_user_id()
     # Stateless: no history to clear
     msg = f"Conversation {'conversation_id=' + conversation_id + ' ' if conversation_id else ''}history cleared"
     return jsonify({"message": msg})
@@ -942,11 +915,8 @@ def public_chat():
     if not message and not image_path:
         return jsonify({"error": "message or image_path required"}), 400
 
-    # Per-IP isolation for anonymous users
-    user_id = f"anon_{ip.replace('.', '_')}"
-
     try:
-        full_response = friday.process_message(message, image_path=image_path, user_id=user_id, conversation_id=conversation_id)
+        full_response = friday.process_message(message, image_path=image_path)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -973,16 +943,13 @@ def public_chat_stream():
     if not message and not image_path:
         return jsonify({"error": "message or image_path required"}), 400
 
-    # Per-IP isolation for anonymous users
-    user_id = f"anon_{ip.replace('.', '_')}"
-
     def generate():
         try:
-            for chunk in friday.process_message_stream(message, image_path=image_path, user_id=user_id, conversation_id=conversation_id):
+            for chunk in friday.process_message_stream(message, image_path=image_path):
                 cleaned = strip_markers(chunk)
                 if cleaned:
                     yield f"data: {json.dumps({'text': cleaned})}\n\n"
-            yield f"data: {json.dumps({'done': True, 'conversation_id': conversation_id})}\n\n"
+            yield f"data: {json.dumps({'done': True})}\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
 
@@ -1055,12 +1022,9 @@ def api_chat():
     if not message and not image_path:
         return jsonify({"error": "message or image_path required"}), 400
 
-    user_id = _get_user_id()
-    logger.info(f"[api/chat] user_id={user_id}, conversation_id={conversation_id}, message_len={len(message)}")
-
     try:
         full_response = friday.process_message(
-            message, image_path=image_path, user_id=user_id, conversation_id=conversation_id, agent_name=agent
+            message, image_path=image_path, agent_name=agent
         )
     except Exception as e:
         return jsonify({"error": str(e)}), 500

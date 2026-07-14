@@ -28,22 +28,19 @@ class FridayCore:
 
         return text, None
 
-    def process_message(self, user_text, image_path=None, user_id=None,
-                        conversation_id=None, conversation_context=None,
-                        agent_name=None):
+    def process_message(self, user_text, image_path=None,
+                        conversation_context=None, agent_name=None):
         """Non-streaming process. All context must be passed in."""
         full = ""
         for chunk in self.process_message_stream(
-            user_text, image_path=image_path, user_id=user_id,
-            conversation_id=conversation_id,
+            user_text, image_path=image_path,
             conversation_context=conversation_context, agent_name=agent_name
         ):
             full += chunk
         return full
 
-    def process_message_stream(self, user_text, image_path=None, user_id=None,
-                                conversation_id=None, conversation_context=None,
-                                agent_name=None):
+    def process_message_stream(self, user_text, image_path=None,
+                                conversation_context=None, agent_name=None):
         """Core streaming pipeline — fully stateless.
 
         All conversation context must be passed in via ``conversation_context``
