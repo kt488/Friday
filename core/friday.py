@@ -12,19 +12,14 @@ class FridayCore:
         self.brain = FridayBrain()
         self.executive = FridayExecutive()
         self.tenants = TenantManager(self.db)
-        self._active_agent = None
-        self._last_conversation_id = None
 
     def _extract_agent_tag(self, text):
         """Check for [AGENT: name] or [CLEAR_AGENT] tags in user input.
         Returns (cleaned_text, agent_name_or_none).
         """
-        # Check for clear agent tag
         if "[CLEAR_AGENT]" in text:
-            self._active_agent = None
             text = text.replace("[CLEAR_AGENT]", "").strip()
 
-        # Check for agent activation
         m = re.search(r'\[AGENT:\s*(\w+[\w-]*)\]', text)
         if m:
             agent_name = m.group(1).strip()
@@ -33,54 +28,45 @@ class FridayCore:
 
         return text, None
 
-    def process_message(self, user_text, image_path=None, user_id=None, conversation_id=None):
-        """Legacy non-streaming process."""
+    def process_message(self, user_text, image_path=None, user_id=None,
+                        conversation_id=None, conversation_context=None,
+                        agent_name=None):
+        """Non-streaming process. All context must be passed in."""
         full = ""
-        for chunk in self.process_message_stream(user_text, image_path=image_path, user_id=user_id, conversation_id=conversation_id):
+        for chunk in self.process_message_stream(
+            user_text, image_path=image_path, user_id=user_id,
+            conversation_id=conversation_id,
+            conversation_context=conversation_context, agent_name=agent_name
+        ):
             full += chunk
         return full
 
-    def process_message_stream(self, user_text, image_path=None, user_id=None, conversation_id=None):
-        """Core streaming pipeline: load user-scoped context, stream LLM response,
-        execute tools, yield final output."""
-        # 1. Validate or auto-create conversation
-        if user_id and not conversation_id:
-            conversation_id = self.db.create_conversation(user_id)
-        elif user_id and conversation_id:
-            # Verify conversation belongs to this user
-            conv = self.db.get_conversation(user_id, conversation_id)
-            if not conv:
-                conversation_id = self.db.create_conversation(user_id)
-        self._last_conversation_id = conversation_id
+    def process_message_stream(self, user_text, image_path=None, user_id=None,
+                                conversation_id=None, conversation_context=None,
+                                agent_name=None):
+        """Core streaming pipeline — fully stateless.
 
-        # 2. Load conversation history (last 10 messages, scoped to user + conversation)
-        if user_id and conversation_id:
-            history = self.db.get_conversation_history(user_id=user_id, conversation_id=conversation_id, limit=10)
-        else:
-            history = self.db.get_conversation_history(limit=10)  # legacy fallback
+        All conversation context must be passed in via ``conversation_context``
+        (a list of dicts with ``role`` and ``message`` keys).  No database
+        lookups or writes are performed for conversation state.
+        """
+        # 1. Use provided conversation context or empty
+        history = conversation_context or []
 
         # 2. Check for agent tags in user input
         cleaned_text, agent_tag = self._extract_agent_tag(user_text)
-        if agent_tag:
-            self._active_agent = agent_tag
+        active_agent = agent_tag or agent_name
         user_input = cleaned_text or user_text
 
         # 3. Load active agent prompt if one is set
         agent_prompt = ""
-        if self._active_agent:
-            agent_prompt = self.brain.load_agent_prompt(self._active_agent) or ""
+        if active_agent:
+            agent_prompt = self.brain.load_agent_prompt(active_agent) or ""
 
-        # 4. Save user message to both databases
-        self.db.save_message("user", user_input, user_id=user_id, conversation_id=conversation_id)
-        try:
-            self.executive.supabase.save_message("user", user_input, user_id=user_id, conversation_id=conversation_id)
-        except Exception:
-            pass
-
-        # 5. Load MCP tools description
+        # 4. Load MCP tools description
         mcp_desc = self.executive.mcp.get_all_tools_description()
 
-        # 6. Stream from brain
+        # 5. Stream from brain
         full_response = ""
         for chunk in self.brain.generate_stream(
             user_input,
@@ -92,7 +78,7 @@ class FridayCore:
             full_response += chunk
             yield chunk
 
-        # 7. Post-process: execute tools and handle file delivery
+        # 6. Post-process: execute tools and handle file delivery
         processed, tool_used, metadata = self.executive.parse_and_execute(full_response)
 
         # Yield any tool execution markers that weren't already part of the stream
@@ -101,50 +87,27 @@ class FridayCore:
             if extra.strip():
                 yield extra
 
-        # 8. Save final response to both databases
-        # Strip internal markers from the saved response text
-        save_text = re.sub(r'(?:\[TOOL:|\*\*TOOL:).*?(?:\]|\*\*)', '', processed, flags=re.DOTALL)
-        save_text = re.sub(r'(?:\[SEND_FILE_NOW:|\*\*SEND_FILE_NOW:).*?(?:\]|\*\*)', '', save_text, flags=re.DOTALL)
-        save_text = re.sub(r'(?:\[Executed|\*\*\[?Executed).*?(?:\]|\*\*)', '', save_text, flags=re.DOTALL)
-        save_text = save_text.strip()
-        if save_text:
-            self.db.save_message("friday", save_text, user_id=user_id, conversation_id=conversation_id)
-            try:
-                self.executive.supabase.save_message("friday", save_text, user_id=user_id, conversation_id=conversation_id)
-            except Exception:
-                pass
+    def process_website_message_stream(self, slug, user_text, session_id,
+                                        image_path=None, conversation_context=None):
+        """Streaming pipeline for a tenant website's chatbot — stateless.
 
-    def clear_history(self, user_id=None, conversation_id=None):
-        """Delete conversation history scoped to user + conversation."""
-        self.db.clear_conversation_history(user_id=user_id, conversation_id=conversation_id)
-        return True
-
-    def process_website_message_stream(self, slug, user_text, session_id, image_path=None):
-        """Streaming pipeline for a tenant website's chatbot.
-
-        Uses the website's persona/business-info to build the system prompt
-        and saves messages scoped to the website + session.
+        Uses the website's persona/business-info to build the system prompt.
+        No messages are persisted; context must be passed in.
         """
         site = self.tenants.get(slug)
         if not site:
             yield "[Error: Website not found]"
             return
 
-        website_id = site["id"]
         system_prompt = self.tenants.build_system_prompt(slug)
-
-        # Load MCP tools description
         mcp_desc = self.executive.mcp.get_all_tools_description()
+        history = conversation_context or []
 
-        # Save user message scoped to website session
-        self.db.save_website_message(website_id, session_id, "user", user_text)
-
-        # Stream from brain with website system prompt
         full_response = ""
         for chunk in self.brain.generate_stream(
             user_text,
             image_path=image_path,
-            history=[],  # website sessions don't use main conversation history
+            history=history,
             extra_tools=mcp_desc,
             agent_prompt=system_prompt,
             system_prompt_override=system_prompt
@@ -155,23 +118,18 @@ class FridayCore:
         # Post-process: execute tools and handle file delivery
         processed, tool_used, metadata = self.executive.parse_and_execute(full_response)
 
-        # Yield extra tool execution markers
         if processed != full_response:
             extra = processed[len(full_response):]
             if extra.strip():
                 yield extra
 
-        # Save final response
-        save_text = re.sub(r'(?:\[TOOL:|\*\*TOOL:).*?(?:\]|\*\*)', '', processed, flags=re.DOTALL)
-        save_text = re.sub(r'(?:\[SEND_FILE_NOW:|\*\*SEND_FILE_NOW:).*?(?:\]|\*\*)', '', save_text, flags=re.DOTALL)
-        save_text = re.sub(r'(?:\[Executed|\*\*\[?Executed).*?(?:\]|\*\*)', '', save_text, flags=re.DOTALL)
-        save_text = save_text.strip()
-        if save_text:
-            self.db.save_website_message(website_id, session_id, "assistant", save_text)
-
-    def process_website_message(self, slug, user_text, session_id, image_path=None):
+    def process_website_message(self, slug, user_text, session_id,
+                                 image_path=None, conversation_context=None):
         """Non-streaming wrapper for website-scoped chat."""
         full = ""
-        for chunk in self.process_website_message_stream(slug, user_text, session_id, image_path=image_path):
+        for chunk in self.process_website_message_stream(
+            slug, user_text, session_id, image_path=image_path,
+            conversation_context=conversation_context
+        ):
             full += chunk
         return full

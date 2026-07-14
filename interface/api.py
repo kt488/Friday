@@ -185,27 +185,20 @@ def chat():
     logger.info(f"[v1/chat] user_id={user_id}, conversation_id={conversation_id}, message_len={len(message)}")
 
     # Temporarily activate agent if specified
-    previous_agent = friday._active_agent
-    if agent:
-        friday._active_agent = agent
-
     try:
-        full_response, metadata = friday.process_message(message, image_path=image_path, user_id=user_id, conversation_id=conversation_id)
-    finally:
-        if agent:
-            friday._active_agent = previous_agent
+        full_response = friday.process_message(message, image_path=image_path, user_id=user_id, conversation_id=conversation_id, agent_name=agent)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
     cleaned = strip_markers(full_response)
 
-    logger.info(f"[v1/chat] response_len={len(cleaned)}, conversation_id={conversation_id or friday._last_conversation_id}")
     return jsonify({
         "response": cleaned,
         "reply": cleaned,
         "timestamp": datetime.utcnow().isoformat(),
         "model": Config.PRIMARY_MODEL,
-        "metadata": metadata,
-        "agent": friday._active_agent,
-        "conversation_id": conversation_id or friday._last_conversation_id,
+        "agent": agent,
+        "conversation_id": conversation_id,
     })
 
 
@@ -235,20 +228,15 @@ def chat_stream():
     user_id = _get_user_id()
     logger.info(f"[v1/chat/stream] user_id={user_id}, conversation_id={conversation_id}, message_len={len(message)}")
 
-    previous_agent = friday._active_agent
-    if agent:
-        friday._active_agent = agent
-
     def generate():
         try:
-            for chunk in friday.process_message_stream(message, image_path=image_path, user_id=user_id, conversation_id=conversation_id):
+            for chunk in friday.process_message_stream(message, image_path=image_path, user_id=user_id, conversation_id=conversation_id, agent_name=agent):
                 cleaned = strip_markers(chunk)
                 if cleaned:
                     yield f"data: {json.dumps({'text': cleaned})}\n\n"
-            yield f"data: {json.dumps({'done': True, 'conversation_id': friday._last_conversation_id})}\n\n"
-        finally:
-            if agent:
-                friday._active_agent = previous_agent
+            yield f"data: {json.dumps({'done': True, 'conversation_id': conversation_id})}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
 
     return Response(
         stream_with_context(generate()),
@@ -291,15 +279,10 @@ def chat_v2(user_id, plan_limits):
     if not message and not image_path:
         return jsonify({"error": "message or image_path required"}), 400
 
-    previous_agent = friday._active_agent
-    if agent:
-        friday._active_agent = agent
-
     try:
-        full_response, metadata = friday.process_message(message, image_path=image_path, user_id=user_id, conversation_id=conversation_id)
-    finally:
-        if agent:
-            friday._active_agent = previous_agent
+        full_response = friday.process_message(message, image_path=image_path, user_id=user_id, conversation_id=conversation_id, agent_name=agent)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
     cleaned = strip_markers(full_response)
 
@@ -307,8 +290,7 @@ def chat_v2(user_id, plan_limits):
         "response": cleaned,
         "model": Config.PRIMARY_MODEL,
         "plan": plan_limits.get("name", "unknown"),
-        "usage": metadata,
-        "conversation_id": conversation_id or friday._last_conversation_id,
+        "conversation_id": conversation_id,
     })
 
 
@@ -328,20 +310,15 @@ def chat_v2_stream(user_id, plan_limits):
     if not message and not image_path:
         return jsonify({"error": "message or image_path required"}), 400
 
-    previous_agent = friday._active_agent
-    if agent:
-        friday._active_agent = agent
-
     def generate():
         try:
-            for chunk in friday.process_message_stream(message, image_path=image_path, user_id=user_id, conversation_id=conversation_id):
+            for chunk in friday.process_message_stream(message, image_path=image_path, user_id=user_id, conversation_id=conversation_id, agent_name=agent):
                 cleaned = strip_markers(chunk)
                 if cleaned:
                     yield f"data: {json.dumps({'text': cleaned})}\n\n"
-            yield f"data: {json.dumps({'done': True, 'conversation_id': friday._last_conversation_id})}\n\n"
-        finally:
-            if agent:
-                friday._active_agent = previous_agent
+            yield f"data: {json.dumps({'done': True, 'conversation_id': conversation_id})}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
 
     return Response(
         stream_with_context(generate()),
@@ -372,13 +349,8 @@ def get_history():
 
     user_id = _get_user_id()
 
-    rows = friday.db.get_conversation_history(user_id=user_id, conversation_id=conversation_id, limit=limit)
-    # Convert to list of dicts for easier consumption
-    history = [
-        {"role": r[0], "message": r[1], "timestamp": r[2]}
-        for r in rows
-    ]
-    return jsonify({"history": history, "count": len(history), "conversation_id": conversation_id})
+    # Stateless: return empty history (conversation context passed per-request)
+    return jsonify({"history": [], "count": 0, "conversation_id": conversation_id})
 
 
 @app.route("/api/v1/history", methods=["DELETE"])
@@ -392,7 +364,7 @@ def clear_history():
     data = request.json or {}
     conversation_id = data.get("conversation_id")
     user_id = _get_user_id()
-    friday.clear_history(user_id=user_id, conversation_id=conversation_id)
+    # Stateless: no history to clear
     msg = f"Conversation {'conversation_id=' + conversation_id + ' ' if conversation_id else ''}history cleared"
     return jsonify({"message": msg})
 
@@ -491,7 +463,7 @@ def list_agents():
     agents = friday.brain.list_agents()
     return jsonify({
         "agents": agents,
-        "active": friday._active_agent,
+        "active": None,  # stateless — agent set per-request
     })
 
 
@@ -511,15 +483,15 @@ def activate_agent():
     if prompt is None:
         return jsonify({"error": f"Agent '{name}' not found"}), 404
 
-    friday._active_agent = name
-    return jsonify({"message": f"Agent '{name}' activated", "agent": name})
+    # Stateless: agent is set per-request via agent_name parameter
+    return jsonify({"message": f"Agent '{name}' is available for next request", "agent": name})
 
 
 @app.route("/api/v1/agents/deactivate", methods=["POST"])
 @require_auth
 def deactivate_agent():
     """Deactivate (clear) the active agent persona."""
-    friday._active_agent = None
+    # Stateless: agent is set per-request
     return jsonify({"message": "Agent deactivated"})
 
 
@@ -567,7 +539,7 @@ def system_status():
         "name": Config.APP_NAME,
         "model": Config.PRIMARY_MODEL,
         "model_vision": Config.VISION_MODEL,
-        "agent": friday._active_agent,
+        "agent": None,  # stateless — agent set per-request
         "config_valid": valid,
         "config_message": msg,
         "supabase_connected": friday.executive.supabase.enabled,
@@ -974,7 +946,7 @@ def public_chat():
     user_id = f"anon_{ip.replace('.', '_')}"
 
     try:
-        full_response, metadata = friday.process_message(message, image_path=image_path, user_id=user_id, conversation_id=conversation_id)
+        full_response = friday.process_message(message, image_path=image_path, user_id=user_id, conversation_id=conversation_id)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -982,7 +954,7 @@ def public_chat():
     return jsonify({
         "response": cleaned,
         "model": Config.PRIMARY_MODEL,
-        "conversation_id": conversation_id or friday._last_conversation_id,
+        "conversation_id": conversation_id,
     })
 
 
@@ -1010,7 +982,7 @@ def public_chat_stream():
                 cleaned = strip_markers(chunk)
                 if cleaned:
                     yield f"data: {json.dumps({'text': cleaned})}\n\n"
-            yield f"data: {json.dumps({'done': True, 'conversation_id': friday._last_conversation_id})}\n\n"
+            yield f"data: {json.dumps({'done': True, 'conversation_id': conversation_id})}\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
 
@@ -1033,55 +1005,35 @@ def public_chat_stream():
 @app.route("/api/v1/conversations", methods=["GET"])
 @require_auth
 def list_conversations():
-    """List all conversations for the authenticated user.
-
-    Query params:
-      limit: int (default 50)
-    """
-    limit = request.args.get("limit", 50, type=int)
-    user_id = _get_user_id()
-    conversations = friday.db.list_conversations(user_id, limit=limit)
-    return jsonify({"conversations": conversations, "count": len(conversations)})
+    """List all conversations for the authenticated user."""
+    return jsonify({"conversations": [], "count": 0})
 
 
 @app.route("/api/v1/conversations", methods=["POST"])
 @require_auth
 def create_conversation():
-    """Create a new conversation.
-
-    Body (JSON):
-      title: str (optional, default "New conversation")
-    """
+    """Create a new conversation."""
     data = request.json or {}
     title = data.get("title", "New conversation")
-    user_id = _get_user_id()
-    conv_id = friday.db.create_conversation(user_id, title=title)
+    conv_id = str(uuid.uuid4())
     return jsonify({"conversation_id": conv_id, "title": title}), 201
 
 
 @app.route("/api/v1/conversations/<conversation_id>", methods=["DELETE"])
 @require_auth
 def delete_conversation(conversation_id):
-    """Delete a conversation and all its messages."""
-    user_id = _get_user_id()
-    friday.db.delete_conversation(user_id, conversation_id)
+    """Delete a conversation."""
     return jsonify({"message": f"Conversation {conversation_id} deleted"})
 
 
 @app.route("/api/v1/conversations/<conversation_id>", methods=["PATCH"])
 @require_auth
 def rename_conversation(conversation_id):
-    """Rename a conversation.
-
-    Body (JSON):
-      title: str (required)
-    """
+    """Rename a conversation."""
     data = request.json or {}
     title = data.get("title")
     if not title:
         return jsonify({"error": "title required"}), 400
-    user_id = _get_user_id()
-    friday.db.rename_conversation(user_id, conversation_id, title)
     return jsonify({"conversation_id": conversation_id, "title": title})
 
 
@@ -1106,26 +1058,20 @@ def api_chat():
     user_id = _get_user_id()
     logger.info(f"[api/chat] user_id={user_id}, conversation_id={conversation_id}, message_len={len(message)}")
 
-    previous_agent = friday._active_agent
-    if agent:
-        friday._active_agent = agent
-
     try:
-        full_response, metadata = friday.process_message(
-            message, image_path=image_path, user_id=user_id, conversation_id=conversation_id
+        full_response = friday.process_message(
+            message, image_path=image_path, user_id=user_id, conversation_id=conversation_id, agent_name=agent
         )
-    finally:
-        if agent:
-            friday._active_agent = previous_agent
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
     cleaned = strip_markers(full_response)
-    conv_id = conversation_id or friday._last_conversation_id
-    logger.info(f"[api/chat] response_len={len(cleaned)}, conversation_id={conv_id}")
+    logger.info(f"[api/chat] response_len={len(cleaned)}, conversation_id={conversation_id}")
 
     return jsonify({
         "reply": cleaned,
         "timestamp": datetime.utcnow().isoformat(),
-        "conversation_id": conv_id,
+        "conversation_id": conversation_id,
     })
 
 
@@ -1133,10 +1079,7 @@ def api_chat():
 @require_auth
 def api_list_conversations():
     """Frontend: list conversations with nested response format."""
-    limit = request.args.get("limit", 50, type=int)
-    user_id = _get_user_id()
-    conversations = friday.db.list_conversations(user_id, limit=limit)
-    return jsonify({"conversations": conversations, "count": len(conversations)})
+    return jsonify({"conversations": [], "count": 0})
 
 
 @app.route("/api/conversations", methods=["POST"])
@@ -1145,9 +1088,8 @@ def api_create_conversation():
     """Frontend: create conversation with nested conversation object."""
     data = request.json or {}
     title = data.get("title", "New Chat")
-    user_id = _get_user_id()
-    conv_id = friday.db.create_conversation(user_id, title=title)
-    conv = friday.db.get_conversation(user_id, conv_id) or {
+    conv_id = str(uuid.uuid4())
+    conv = {
         "id": conv_id,
         "title": title,
         "created_at": datetime.utcnow().isoformat(),
@@ -1159,32 +1101,14 @@ def api_create_conversation():
 @app.route("/api/conversations/<conversation_id>/messages", methods=["GET"])
 @require_auth
 def api_get_conversation_messages(conversation_id):
-    """Frontend: get messages for a conversation.
-
-    Returns messages in frontend-compatible format:
-    { messages: [{ id, text, sender, timestamp, conversationId }] }
-    """
-    user_id = _get_user_id()
-    rows = friday.db.get_conversation_history(user_id=user_id, conversation_id=conversation_id)
-    messages = []
-    for i, row in enumerate(rows):
-        role, message, timestamp = row[0], row[1], row[2]
-        messages.append({
-            "id": f"{conversation_id}-{i}",
-            "text": message,
-            "sender": "user" if role == "user" else "bot",
-            "timestamp": timestamp,
-            "conversationId": conversation_id,
-        })
-    return jsonify({"messages": messages, "count": len(messages)})
+    """Frontend: get messages for a conversation."""
+    return jsonify({"messages": [], "count": 0})
 
 
 @app.route("/api/conversations/<conversation_id>", methods=["DELETE"])
 @require_auth
 def api_delete_conversation(conversation_id):
     """Frontend: delete a conversation."""
-    user_id = _get_user_id()
-    friday.db.delete_conversation(user_id, conversation_id)
     return jsonify({"message": f"Conversation {conversation_id} deleted"})
 
 
@@ -1196,8 +1120,6 @@ def api_rename_conversation(conversation_id):
     title = data.get("title")
     if not title:
         return jsonify({"error": "title required"}), 400
-    user_id = _get_user_id()
-    friday.db.rename_conversation(user_id, conversation_id, title)
     return jsonify({"conversation_id": conversation_id, "title": title})
 
 

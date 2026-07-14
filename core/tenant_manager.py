@@ -100,21 +100,6 @@ class TenantManager:
 
         return "\n".join(lines)
 
-    # ── Scoped Conversations ──
-
-    def save_message(self, slug, session_id, role, message):
-        site = self.get(slug)
-        if not site:
-            return False
-        self.db.save_website_message(site["id"], session_id, role, message)
-        return True
-
-    def get_conversation(self, slug, session_id, limit=20):
-        site = self.get(slug)
-        if not site:
-            return []
-        return self.db.get_website_conversation(site["id"], session_id, limit=limit)
-
     # ── Lead Management ──
 
     def save_lead(self, slug, name="", email="", phone="", message="", metadata=None):

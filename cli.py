@@ -31,12 +31,10 @@ def cmd_chat(args):
     cli = FridayCLI(version=VERSION)
     cli.header()
 
-    # Count existing messages
-    try:
-        rows = friday.db.get_conversation_history(limit=10000)
-        cli.msg_count = len(rows)
-    except Exception:
-        pass
+    # Local state for stateless mode
+    conversation_context = []
+    active_agent = None
+    cli.msg_count = 0
 
     while True:
         user_input = cli.get_input()
@@ -50,7 +48,8 @@ def cmd_chat(args):
                 break
 
             elif tag == "/clear":
-                friday.clear_history()
+                conversation_context = []
+                active_agent = None
                 cli.msg_count = 0
                 cli.info("Conversation cleared.")
 
@@ -59,7 +58,7 @@ def cmd_chat(args):
                     cpu=42,
                     memory=56,
                     network="ONLINE" if friday.executive.supabase.enabled else "DISABLED",
-                    agent=friday._active_agent or "STANDBY",
+                    agent=active_agent or "STANDBY",
                 )
 
             elif tag == "/agent":
@@ -68,12 +67,12 @@ def cmd_chat(args):
                     continue
                 name = cmd[1]
                 if name == "off":
-                    friday._active_agent = None
+                    active_agent = None
                     cli.info("Agent deactivated.")
                 else:
                     prompt = friday.brain.load_agent_prompt(name)
                     if prompt:
-                        friday._active_agent = name
+                        active_agent = name
                         cli.success(f"Agent '{name}' activated.")
                     else:
                         cli.error(f"Agent '{name}' not found.")
@@ -111,11 +110,19 @@ def cmd_chat(args):
         cli.msg_count += 1
         cli.user_message(user_input)
 
+        conversation_context.append({"role": "user", "message": user_input})
+
         try:
-            for _ in cli.stream_response(
-                friday.process_message_stream(user_input)
+            full_response = ""
+            for chunk in cli.stream_response(
+                friday.process_message_stream(
+                    user_input,
+                    conversation_context=conversation_context,
+                    agent_name=active_agent,
+                )
             ):
-                pass
+                full_response += chunk
+            conversation_context.append({"role": "assistant", "message": full_response})
         except Exception as e:
             cli.error(str(e))
 
@@ -134,7 +141,7 @@ def cmd_ask(args):
     cli.system("Processing request...")
 
     try:
-        response, metadata = friday.process_message(text)
+        response = friday.process_message(text)
         if response:
             cli.response(response)
     except Exception as e:
@@ -186,27 +193,13 @@ def cmd_history(args):
     """View or clear conversation history."""
     from interface.cli import FridayCLI
     cli = FridayCLI(version=VERSION)
-    friday = FridayCore()
 
     if args.clear:
-        friday.clear_history()
-        cli.success("Conversation history cleared.")
+        cli.info("Stateless mode: no persisted history to clear.")
         return
 
-    rows = friday.db.get_conversation_history(limit=args.limit)
-    if not rows:
-        cli.info("No conversation history.")
-        return
-
-    cli.system(f"Recent history (last {len(rows)}):")
-    cli.divider()
-    for role, message, ts in rows:
-        prefix = "YOU" if role == "user" else "FRIDAY"
-        preview = message[:120].replace("\n", " ")
-        if len(message) > 120:
-            preview += "..."
-        cli.raw(f"  [{ts}] [{prefix:<7}] {preview}")
-    cli.divider()
+    cli.info("Stateless mode: conversation history is not persisted.")
+    cli.info("In chat sessions, history is kept in memory for the duration of the session.")
 
 
 # ── Agents ──
@@ -222,17 +215,12 @@ def cmd_agents(args):
         if not agents:
             cli.info("No agent files found.")
             return
-        active = friday._active_agent
         cli.system(f"Available agents ({len(agents)}):")
         cli.divider()
         for a in agents:
-            marker = " ◄ ACTIVE" if a["name"] == active else ""
-            cli.raw(f"  {a['name']}{marker}")
+            cli.raw(f"  {a['name']}")
         cli.divider()
-        if active:
-            cli.info(f"Active agent: {active}")
-        else:
-            cli.info("No agent currently active.")
+        cli.info("Use [AGENT: name] tag in your message to activate per-request.")
 
     elif args.action == "load":
         if not args.name:
@@ -240,15 +228,14 @@ def cmd_agents(args):
             sys.exit(1)
         prompt = friday.brain.load_agent_prompt(args.name)
         if prompt:
-            friday._active_agent = args.name
-            cli.success(f"Agent '{args.name}' activated ({len(prompt)} chars).")
+            cli.success(f"Agent '{args.name}' found ({len(prompt)} chars).")
+            cli.info("Use [AGENT: {0}] tag in your message to activate.".format(args.name))
         else:
             cli.error(f"Agent '{args.name}' not found.")
             sys.exit(1)
 
     elif args.action == "clear":
-        friday._active_agent = None
-        cli.info("Agent deactivated.")
+        cli.info("Agents are now per-request via [AGENT: name] tag. No global agent to clear.")
 
 
 # ── System ──
@@ -266,22 +253,18 @@ def cmd_system(args):
     cli.raw(f"  Version:   {VERSION}")
     cli.raw(f"  Model:     {Config.PRIMARY_MODEL}")
     cli.raw(f"  Vision:    {Config.VISION_MODEL}")
-    cli.raw(f"  Agent:     {friday._active_agent or '(none)'}")
+    cli.raw(f"  Agent:     Per-request ([AGENT: name] tag)")
     cli.raw(f"  Config:    {'OK' if valid else msg}")
     cli.raw(f"  Supabase:  {'connected' if friday.executive.supabase.enabled else 'disabled'}")
     mcp_count = len(getattr(friday.executive.mcp, "clients", []))
     cli.raw(f"  MCP:       {mcp_count} server(s)")
-    try:
-        rows = friday.db.get_conversation_history(limit=10000)
-        cli.raw(f"  Messages:  {len(rows)} in history")
-    except Exception:
-        pass
+    cli.raw(f"  Messages:  N/A (stateless mode)")
     cli.divider()
     cli.status_bar(
         cpu=42,
         memory=56,
         network="ONLINE" if friday.executive.supabase.enabled else "DISABLED",
-        agent=friday._active_agent or "STANDBY",
+        agent="PER-REQUEST",
     )
 
 

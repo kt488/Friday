@@ -161,23 +161,3 @@ class SupabaseClient:
             print(f"[Supabase] Error logging file: {e}")
             return False
 
-    # ── Conversation history ──
-
-    def save_message(self, role, message):
-        """Logs conversation history to 'friday_history' table."""
-        if not self.enabled:
-            return
-
-        endpoint = f"{self.url}/rest/v1/friday_history"
-        headers = self._headers()
-
-        data = {
-            "role": role,
-            "content": message,
-            "timestamp": datetime.now().isoformat()
-        }
-
-        try:
-            requests.post(endpoint, headers=headers, json=data)
-        except Exception:
-            pass

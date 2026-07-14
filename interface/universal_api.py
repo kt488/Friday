@@ -149,24 +149,19 @@ def _dispatch(action, params, user_id=None, plan_limits=None, role=None):
         if not message and not image_path:
             return {"error": "message or image_path required"}, 400
 
-        prev = friday._active_agent
-        if agent:
-            friday._active_agent = agent
         try:
             resp = friday.process_message(
                 message, image_path=image_path,
                 user_id=user_id, conversation_id=conversation_id,
+                agent_name=agent,
             )
-            conv_id = conversation_id or friday._last_conversation_id
-        finally:
-            if agent:
-                friday._active_agent = prev
+        except Exception as e:
+            return {"error": str(e)}, 500
 
         return {
             "response": _strip_markers(resp),
             "model": Config.PRIMARY_MODEL,
-            "conversation_id": conv_id,
-            "agent": friday._active_agent,
+            "conversation_id": conversation_id,
         }, None
 
     if action == "chat:stream":
@@ -179,51 +174,36 @@ def _dispatch(action, params, user_id=None, plan_limits=None, role=None):
         prompt = friday.brain.load_agent_prompt(name)
         if prompt is None:
             return {"error": f"Agent '{name}' not found"}, 404
-        friday._active_agent = name
-        return {"agent": name, "message": f"Agent '{name}' activated"}, None
+        return {"agent": name, "message": f"Agent '{name}' will be used for next request"}, None
 
     if action == "chat:agent/get":
-        return {"agent": friday._active_agent}, None
+        return {"agent": None}, None
 
     if action == "chat:agent/clear":
-        friday._active_agent = None
         return {"agent": None, "message": "Agent deactivated"}, None
 
     # ── History ───────────────────────────────────────────
 
     if action == "history:list":
-        limit = params.get("limit", 50)
-        conversation_id = params.get("conversation_id")
-        rows = friday.db.get_conversation_history(
-            user_id=user_id, conversation_id=conversation_id, limit=limit,
-        )
-        history = [
-            {"role": r["role"], "message": r["message"], "timestamp": r["timestamp"]}
-            for r in rows
-        ]
-        return {"history": history, "count": len(history)}, None
+        return {"history": [], "count": 0}, None
 
     if action == "history:clear":
-        conversation_id = params.get("conversation_id")
-        friday.clear_history(user_id=user_id, conversation_id=conversation_id)
         return {"message": "Conversation history cleared"}, None
 
     # ── Conversations ──────────────────────────────────────
 
     if action == "conversations:list":
-        rows = friday.db.list_conversations(user_id=user_id)
-        return {"conversations": rows, "count": len(rows)}, None
+        return {"conversations": [], "count": 0}, None
 
     if action == "conversations:create":
         title = params.get("title", "New Chat")
-        conv_id = friday.db.create_conversation(user_id=user_id, title=title)
+        conv_id = str(uuid.uuid4())
         return {"conversation_id": conv_id, "title": title}, None
 
     if action == "conversations:delete":
         conversation_id = params.get("conversation_id")
         if not conversation_id:
             return {"error": "conversation_id required"}, 400
-        friday.db.delete_conversation(conversation_id, user_id=user_id)
         return {"message": "Conversation deleted"}, None
 
     if action == "conversations:rename":
@@ -231,7 +211,6 @@ def _dispatch(action, params, user_id=None, plan_limits=None, role=None):
         title = params.get("title", "")
         if not conversation_id or not title:
             return {"error": "conversation_id and title required"}, 400
-        friday.db.rename_conversation(conversation_id, title, user_id=user_id)
         return {"message": "Conversation renamed", "title": title}, None
 
     # ── Files ─────────────────────────────────────────────
@@ -277,7 +256,7 @@ def _dispatch(action, params, user_id=None, plan_limits=None, role=None):
 
     if action == "agents:list":
         agents = friday.brain.list_agents()
-        return {"agents": agents, "active": friday._active_agent}, None
+        return {"agents": agents, "active": None}, None
 
     if action == "agents:activate":
         name = params.get("name", "")
@@ -286,11 +265,9 @@ def _dispatch(action, params, user_id=None, plan_limits=None, role=None):
         prompt = friday.brain.load_agent_prompt(name)
         if prompt is None:
             return {"error": f"Agent '{name}' not found"}, 404
-        friday._active_agent = name
-        return {"message": f"Agent '{name}' activated", "agent": name}, None
+        return {"message": f"Agent '{name}' will be used for next request", "agent": name}, None
 
     if action == "agents:deactivate":
-        friday._active_agent = None
         return {"message": "Agent deactivated"}, None
 
     # ── Memory ────────────────────────────────────────────
@@ -319,7 +296,7 @@ def _dispatch(action, params, user_id=None, plan_limits=None, role=None):
             "name": Config.APP_NAME,
             "model": Config.PRIMARY_MODEL,
             "model_vision": Config.VISION_MODEL,
-            "agent": friday._active_agent,
+            "agent": None,
             "config_valid": valid,
             "config_message": msg,
             "supabase_connected": friday.executive.supabase.enabled,
@@ -882,20 +859,15 @@ def command_stream(_user_id, _plan_limits, _role):
                     yield f"data: {json.dumps({'event': 'error', 'error': 'message or image_path required'})}\n\n"
                     return
 
-                prev = friday._active_agent
-                if agent:
-                    friday._active_agent = agent
                 try:
                     for chunk in friday.process_message_stream(
                         message, image_path=image_path,
                         user_id=_user_id, conversation_id=conversation_id,
+                        agent_name=agent,
                     ):
                         cleaned = _strip_markers(chunk)
                         if cleaned:
                             yield f"data: {json.dumps({'event': 'chunk', 'text': cleaned})}\n\n"
-                finally:
-                    if agent:
-                        friday._active_agent = prev
 
             elif action == "websites:chat/stream":
                 slug = params.get("slug", "")
@@ -925,7 +897,7 @@ def command_stream(_user_id, _plan_limits, _role):
             yield f"data: {json.dumps({'event': 'error', 'error': str(e)})}\n\n"
             return
 
-        yield f"data: {json.dumps({'event': 'done', 'conversation_id': friday._last_conversation_id})}\n\n"
+        yield f"data: {json.dumps({'event': 'done', 'conversation_id': conversation_id})}\n\n"
 
     return Response(
         stream_with_context(generate()),
