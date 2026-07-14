@@ -859,8 +859,7 @@ def command_stream(_user_id, _plan_limits, _role):
                     yield f"data: {json.dumps({'event': 'error', 'error': 'message or image_path required'})}\n\n"
                     return
 
-                try:
-                    for chunk in friday.process_message_stream(
+                for chunk in friday.process_message_stream(
                         message, image_path=image_path,
                         user_id=_user_id, conversation_id=conversation_id,
                         agent_name=agent,
