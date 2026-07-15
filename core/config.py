@@ -14,10 +14,10 @@ class Config:
     PRIMARY_MODEL = os.getenv("MODEL_NAME", "deepseek-ai/deepseek-v4-pro")
     VISION_MODEL = "meta/llama-3.2-11b-vision-instruct"
 
-    # Fallback models
+    # Fallback models — must be FAST (small) to fill the gap while primary loads
     FALLBACK_MODELS = [
-        "qwen/qwen3.5-397b-a17b",
-        "openai/gpt-oss-120b"
+        "meta/llama-3.2-3b-instruct",
+        "mistralai/mistral-7b-instruct-v0.3"
     ]
     
     # Directory Settings
