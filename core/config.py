@@ -16,8 +16,8 @@ class Config:
 
     # Fallback models
     FALLBACK_MODELS = [
-        "nvidia/llama-3.3-nemotron-70b-instruct",
-        "meta/llama-3.1-70b-instruct"
+        "qwen/qwen3.5-397b-a17b",
+        "openai/gpt-oss-120b"
     ]
     
     # Directory Settings

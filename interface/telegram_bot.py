@@ -52,7 +52,7 @@ async def process_and_respond(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     full_text = ""
     last_update_time = 0
-    update_interval = 0.8
+    update_interval = 0.15  # ~6fps refresh for smooth streaming display
     
     try:
         for chunk in friday.process_message_stream(user_text, image_path=image_path):

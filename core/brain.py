@@ -3,6 +3,8 @@ import json
 import time
 import base64
 import os
+import threading
+import queue
 from core.config import Config
 
 class FridayBrain:
@@ -226,12 +228,7 @@ class FridayBrain:
         return "Everything is going sideways. Try again in a sec."
 
     def generate_stream(self, prompt, image_path=None, history=None, extra_tools="", agent_prompt="", system_prompt_override=""):
-        """Yields response chunks for real-time feedback."""
-        # Vision models often don't stream well with complex content blocks, fallback to non-stream if image present
-        if image_path:
-            yield self.generate_response(prompt, image_path, history=history, extra_tools=extra_tools, agent_prompt=agent_prompt, system_prompt_override=system_prompt_override)
-            return
-
+        """Yields response chunks for real-time feedback — races primary vs fallback for lowest latency."""
         messages = [{"role": "system", "content": self._get_system_prompt(extra_tools, agent_prompt, system_prompt_override)}]
 
         if history:
@@ -239,34 +236,149 @@ class FridayBrain:
                 role = "assistant" if msg["role"] == "friday" else "user"
                 messages.append({"role": role, "content": msg["message"]})
 
-        messages.append({"role": "user", "content": prompt})
+        content = [{"type": "text", "text": prompt}]
 
-        data = {
-            "model": Config.PRIMARY_MODEL,
-            "messages": messages,
-            "max_tokens": 2048,
-            "stream": True
-        }
-        
-        try:
-            response = self.session.post(self.url, headers=self._get_headers(), data=json.dumps(data), stream=True, timeout=30)
-            response.raise_for_status()
-            
-            for line in response.iter_lines():
-                if line:
-                    chunk = line.decode('utf-8')
-                    if chunk.startswith("data: "):
-                        content = chunk[6:]
-                        if content == "[DONE]":
-                            break
-                        try:
-                            data = json.loads(content)
-                            if 'choices' in data and data['choices'][0]['delta'].get('content'):
-                                yield data['choices'][0]['delta']['content']
-                        except:
-                            continue
-        except Exception as e:
-            yield self.generate_response(prompt, history=history)
+        if image_path:
+            try:
+                with open(image_path, "rb") as f:
+                    image_b64 = base64.b64encode(f.read()).decode('utf-8')
+                content.append({
+                    "type": "image_url",
+                    "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"}
+                })
+            except Exception as e:
+                print(f"[*] Error encoding image: {e}")
+
+        messages.append({"role": "user", "content": content})
+
+        # Vision models — sequential fallback chain (can't race different vision models meaningfully)
+        if image_path:
+            for m in [Config.VISION_MODEL] + Config.FALLBACK_MODELS:
+                try:
+                    data = {
+                        "model": m,
+                        "messages": messages,
+                        "max_tokens": 2048,
+                        "stream": True
+                    }
+                    response = self.session.post(self.url, headers=self._get_headers(), data=json.dumps(data), stream=True, timeout=60)
+                    response.raise_for_status()
+                    for line in response.iter_lines():
+                        if line:
+                            chunk = line.decode('utf-8')
+                            if chunk.startswith("data: "):
+                                content_data = chunk[6:]
+                                if content_data == "[DONE]":
+                                    return
+                                try:
+                                    d = json.loads(content_data)
+                                    if 'choices' in d and d['choices'][0]['delta'].get('content'):
+                                        yield d['choices'][0]['delta']['content']
+                                except:
+                                    continue
+                    return
+                except Exception as e:
+                    print(f"[*] Vision stream error with {m}: {e}")
+                    continue
+            yield self.generate_response(prompt, image_path=image_path, history=history)
+            return
+
+        # ── Text models: race primary vs fallback ──────────────────────────
+        primary_q = queue.Queue()
+        fallback_q = queue.Queue()
+        primary_ready = threading.Event()
+        stop_fallback = threading.Event()
+
+        def _stream_worker(model_name, out_q, ready_event=None, stop_evt=None):
+            """Pull tokens from a model and push into out_q."""
+            payload = {
+                "model": model_name,
+                "messages": messages,
+                "max_tokens": 2048,
+                "stream": True
+            }
+            try:
+                resp = self.session.post(self.url, headers=self._get_headers(),
+                                         data=json.dumps(payload), stream=True, timeout=60)
+                resp.raise_for_status()
+                first = True
+                for line in resp.iter_lines():
+                    if stop_evt and stop_evt.is_set():
+                        return
+                    if line:
+                        raw = line.decode('utf-8')
+                        if raw.startswith("data: "):
+                            body = raw[6:]
+                            if body == "[DONE]":
+                                out_q.put(None)
+                                return
+                            try:
+                                j = json.loads(body)
+                                text = j['choices'][0]['delta'].get('content')
+                                if text:
+                                    out_q.put(text)
+                                    if first and ready_event:
+                                        ready_event.set()
+                                    first = False
+                            except:
+                                continue
+                out_q.put(None)
+            except Exception as e:
+                print(f"[*] Stream error ({model_name}): {e}")
+                out_q.put(None)
+
+        # Launch both in parallel
+        t1 = threading.Thread(target=_stream_worker,
+                              args=(Config.PRIMARY_MODEL, primary_q, primary_ready, None), daemon=True)
+        t2 = threading.Thread(target=_stream_worker,
+                              args=(Config.FALLBACK_MODELS[0], fallback_q, None, stop_fallback), daemon=True)
+        t1.start()
+        t2.start()
+
+        source = "fallback"  # start by showing fallback
+        done = False
+
+        while not done:
+            # Check if it's time to switch to primary
+            if source == "fallback" and primary_ready.is_set():
+                source = "primary"
+                stop_fallback.set()  # kill fallback thread
+                # Drain any leftover fallback chunks
+                while True:
+                    try:
+                        fallback_q.get_nowait()
+                    except queue.Empty:
+                        break
+
+            active_q = primary_q if source == "primary" else fallback_q
+
+            try:
+                chunk = active_q.get(timeout=0.05)
+                if chunk is None:
+                    if source == "fallback":
+                        # Fallback finished before primary started — switch to primary
+                        source = "primary"
+                        continue
+                    else:
+                        done = True
+                        break
+                yield chunk
+            except queue.Empty:
+                # Check if both threads are dead (unexpected)
+                if not t1.is_alive() and not t2.is_alive():
+                    # One last peek
+                    try:
+                        leftover = primary_q.get_nowait()
+                        if leftover:
+                            yield leftover
+                    except queue.Empty:
+                        pass
+                    done = True
+                    break
+                continue
+
+        t1.join(timeout=1)
+        t2.join(timeout=1)
 
 if __name__ == "__main__":
     brain = FridayBrain()
