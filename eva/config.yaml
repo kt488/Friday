@@ -1,0 +1,90 @@
+# EVA - Evaluation & Verification Agent Configuration
+# =====================================================
+
+general:
+  name: "EVA - Evaluation & Verification Agent"
+  version: "1.0.0"
+  environment: "development"  # development | staging | production
+  log_level: "INFO"
+  log_file: "eva/data/logs/eva.log"
+  data_dir: "eva/data"
+
+engine:
+  max_workers: 4
+  default_timeout: 60  # seconds
+  retry_count: 2
+  parallel: true
+  async_mode: true
+  result_cache_ttl: 3600  # seconds
+  max_results_in_memory: 1000
+
+datasets:
+  default_format: "json"
+  search_paths:
+    - "eva/data/datasets"
+  supported_formats:
+    - json
+    - yaml
+    - csv
+    - sqlite
+    - postgres
+
+evaluators:
+  default:
+    - exact_match
+    - semantic_similarity
+    - ai_judge
+  weights:
+    accuracy: 0.30
+    completeness: 0.15
+    safety: 0.15
+    formatting: 0.05
+    correctness: 0.20
+    tool_usage: 0.10
+    efficiency: 0.05
+
+scoring:
+  pass_threshold: 70.0
+  regression_threshold: 5.0  # percentage drop that triggers alert
+  profile: "balanced"  # balanced | accuracy_focused | safety_focused | speed_focused
+  confidence_level: 0.95
+
+reporting:
+  default_formats:
+    - html
+    - json
+    - markdown
+  output_dir: "eva/data/results"
+  charts: true
+  include_raw_data: false
+  max_reports_retained: 100
+
+dashboard:
+  enabled: true
+  host: "0.0.0.0"
+  port: 8650
+  dark_mode: true
+  refresh_interval: 5  # seconds
+  max_history_days: 90
+
+cicd:
+  provider: "github_actions"  # github_actions | gitlab_ci | jenkins
+  fail_on_regression: true
+  comment_on_pr: true
+  threshold_check: true
+
+security:
+  max_risk_score: 30.0
+  block_on_high_risk: true
+  scan_secrets: true
+  max_injection_tests: 100
+
+load_testing:
+  concurrency_levels:
+    - 1
+    - 10
+    - 50
+    - 100
+  duration: 30  # seconds per level
+  ramp_up: true
+  metrics_interval: 5  # seconds
