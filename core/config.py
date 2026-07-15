@@ -7,18 +7,17 @@ load_dotenv()
 class Config:
     # API Settings
     # Using NVIDIA NIM Endpoint
-    NVIDIA_API_KEY = os.getenv("OPENROUTER_API_KEY") 
+    NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY")
     NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1"
-    
+
     # Model Settings
-    # Using Llama 3.1 8B for ultra-low latency and stability
-    PRIMARY_MODEL = "meta/llama-3.1-8b-instruct"
+    PRIMARY_MODEL = os.getenv("MODEL_NAME", "deepseek-ai/deepseek-v4-pro")
     VISION_MODEL = "meta/llama-3.2-11b-vision-instruct"
-    
+
     # Fallback models
     FALLBACK_MODELS = [
         "nvidia/llama-3.3-nemotron-70b-instruct",
-        "deepseek-ai/deepseek-v4-flash"
+        "meta/llama-3.1-70b-instruct"
     ]
     
     # Directory Settings
@@ -39,8 +38,7 @@ class Config:
         """Validates that essential config is present."""
         os.makedirs(cls.TEMP_DIR, exist_ok=True)
         if not cls.NVIDIA_API_KEY:
-            return False, "Missing NVIDIA_API_KEY (OPENROUTER_API_KEY) in .env"
-        # Support both OpenRouter and NVIDIA/DeepSeek key formats
-        if not (cls.NVIDIA_API_KEY.startswith("sk-or-v1") or cls.NVIDIA_API_KEY.startswith("nvapi-")):
-            return False, "Invalid API key format in .env"
+            return False, "Missing NVIDIA_API_KEY in .env"
+        if not cls.NVIDIA_API_KEY.startswith("nvapi-"):
+            return False, "Invalid NVIDIA API key format — must start with nvapi-"
         return True, "OK"

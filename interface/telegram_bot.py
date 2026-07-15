@@ -159,20 +159,40 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
     caption = update.message.caption if update.message.caption else "Parse this file and give me the data."
     await process_and_respond(update, context, user_text=f"[FILE: {file_path}] {caption}")
 
-if __name__ == '__main__':
-    if not TOKEN:
-        print("Error: TELEGRAM_TOKEN not found in .env file.")
-        exit(1)
-        
+async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Logs pollingerrors instead of crashing."""
+    logging.error(f"Polling error (update {update.update_id if update else '?'}): {context.error}")
+
+def build_application():
+    """Creates and configures the Application instance."""
     request = HTTPXRequest(connect_timeout=30.0, read_timeout=30.0)
     application = ApplicationBuilder().token(TOKEN).request(request).build()
-    
-    # Handlers
+
     application.add_handler(CommandHandler('start', start))
     application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_text))
     application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     application.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, handle_voice))
     application.add_handler(MessageHandler(filters.Document.ALL, handle_document))
+    application.add_error_handler(error_handler)
 
-    print("Friday is online and listening...")
-    application.run_polling()
+    return application
+
+if __name__ == '__main__':
+    if not TOKEN:
+        print("Error: TELEGRAM_TOKEN not found in .env file.")
+        exit(1)
+
+    retry_delay = 1
+    max_retry_delay = 30
+
+    while True:
+        try:
+            application = build_application()
+            print("Friday is online and listening...")
+            application.run_polling()
+            break  # clean shutdown
+        except Exception as e:
+            logging.error(f"Polling crashed: {type(e).__name__}: {e}")
+            time.sleep(retry_delay)
+            retry_delay = min(retry_delay * 2, max_retry_delay)
+            logging.info(f"Restarting polling in {retry_delay}s...")
