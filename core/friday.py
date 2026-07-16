@@ -106,7 +106,6 @@ class FridayCore:
             image_path=image_path,
             history=history,
             extra_tools=mcp_desc,
-            agent_prompt=system_prompt,
             system_prompt_override=system_prompt
         ):
             full_response += chunk

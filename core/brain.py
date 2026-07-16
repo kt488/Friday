@@ -181,9 +181,8 @@ class FridayBrain:
                 role = "assistant" if msg["role"] == "friday" else "user"
                 messages.append({"role": role, "content": msg["message"]})
 
-        content = [{"type": "text", "text": prompt}]
-
         if image_path:
+            content = [{"type": "text", "text": prompt}]
             try:
                 with open(image_path, "rb") as f:
                     image_b64 = base64.b64encode(f.read()).decode('utf-8')
@@ -193,8 +192,9 @@ class FridayBrain:
                 })
             except Exception as e:
                 print(f"[*] Error encoding image: {e}")
-
-        messages.append({"role": "user", "content": content})
+            messages.append({"role": "user", "content": content})
+        else:
+            messages.append({"role": "user", "content": prompt})
 
         for m in models_to_try:
             for i in range(retries):
@@ -236,9 +236,8 @@ class FridayBrain:
                 role = "assistant" if msg["role"] == "friday" else "user"
                 messages.append({"role": role, "content": msg["message"]})
 
-        content = [{"type": "text", "text": prompt}]
-
         if image_path:
+            content = [{"type": "text", "text": prompt}]
             try:
                 with open(image_path, "rb") as f:
                     image_b64 = base64.b64encode(f.read()).decode('utf-8')
@@ -248,8 +247,9 @@ class FridayBrain:
                 })
             except Exception as e:
                 print(f"[*] Error encoding image: {e}")
-
-        messages.append({"role": "user", "content": content})
+            messages.append({"role": "user", "content": content})
+        else:
+            messages.append({"role": "user", "content": prompt})
 
         # Vision models — sequential fallback chain (can't race different vision models meaningfully)
         if image_path:
