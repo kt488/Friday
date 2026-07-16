@@ -358,6 +358,19 @@ class FridayBrain:
                     if source == "fallback":
                         # Fallback finished before primary started — switch to primary
                         source = "primary"
+                        # Block until primary has its first token (no timeout = instant if already set)
+                        # This eliminates the visible gap where fallback is done but primary isn't ready
+                        # 5s timeout prevents hang if primary thread dies silently
+                        if not primary_ready.wait(timeout=5):
+                            # Primary never started — drain whatever we can
+                            try:
+                                leftover = primary_q.get_nowait()
+                                if leftover:
+                                    yield leftover
+                            except queue.Empty:
+                                pass
+                            done = True
+                            break
                         continue
                     else:
                         done = True
