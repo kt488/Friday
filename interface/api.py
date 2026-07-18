@@ -503,20 +503,35 @@ def set_memory():
 # ══════════════════════════════════════════════════════════════
 
 @app.route("/api/v1/system/status", methods=["GET"])
-@require_auth
 def system_status():
     """Health check with current configuration state."""
-    valid, msg = Config.validate()
+    try:
+        valid, msg = Config.validate()
+        name = Config.APP_NAME
+        model = Config.PRIMARY_MODEL
+        vision = Config.VISION_MODEL
+        supabase = friday and friday.executive.supabase.enabled
+        mcp = (
+            [getattr(c, "name", str(c)) for c in getattr(friday.executive.mcp, "clients", [])]
+            if friday else []
+        )
+    except Exception:
+        valid, msg = False, "Core modules not loaded (degraded mode)"
+        name = "Friday"
+        model = "unknown"
+        vision = "unknown"
+        supabase = False
+        mcp = []
     return jsonify({
         "status": "online" if valid else "degraded",
-        "name": Config.APP_NAME,
-        "model": Config.PRIMARY_MODEL,
-        "model_vision": Config.VISION_MODEL,
-        "agent": None,  # stateless — agent set per-request
+        "name": name,
+        "model": model,
+        "model_vision": vision,
+        "agent": None,
         "config_valid": valid,
         "config_message": msg,
-        "supabase_connected": friday.executive.supabase.enabled,
-        "mcp_servers": [getattr(c, "name", str(c)) for c in getattr(friday.executive.mcp, "clients", [])],
+        "supabase_connected": supabase,
+        "mcp_servers": mcp,
     })
 
 

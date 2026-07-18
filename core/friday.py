@@ -12,6 +12,18 @@ class FridayCore:
         self.brain = FridayBrain()
         self.executive = FridayExecutive()
         self.tenants = TenantManager(self.db)
+        self._rag = None  # Lazy initialized RAG pipeline
+
+    def _get_rag(self):
+        if self._rag is None:
+            try:
+                from core.rag.pipeline import RAGPipeline
+                self._rag = RAGPipeline()
+                self._rag.initialize()
+            except Exception as e:
+                print(f"[*] RAG init error (non-fatal): {e}")
+                self._rag = False  # Mark as unavailable
+        return self._rag if self._rag else None
 
     def _extract_agent_tag(self, text):
         """Check for [AGENT: name] or [CLEAR_AGENT] tags in user input.
@@ -40,12 +52,16 @@ class FridayCore:
         return full
 
     def process_message_stream(self, user_text, image_path=None,
-                                conversation_context=None, agent_name=None):
+                                conversation_context=None, agent_name=None,
+                                rag_workspace_id=None, rag_user_id=None):
         """Core streaming pipeline — fully stateless.
 
         All conversation context must be passed in via ``conversation_context``
         (a list of dicts with ``role`` and ``message`` keys).  No database
         lookups or writes are performed for conversation state.
+
+        RAG: If ``rag_workspace_id`` or ``rag_user_id`` is provided, the RAG
+        engine enriches the prompt with retrieved knowledge before generation.
         """
         # 1. Use provided conversation context or empty
         history = conversation_context or []
@@ -63,7 +79,30 @@ class FridayCore:
         # 4. Load MCP tools description
         mcp_desc = self.executive.mcp.get_all_tools_description()
 
-        # 5. Stream from brain
+        # 5. RAG enrichment
+        rag = self._get_rag()
+        rag_context = ""
+        if rag and (rag_workspace_id or rag_user_id):
+            try:
+                ctx = rag.query(
+                    user_input,
+                    workspace_id=rag_workspace_id or "default",
+                    user_id=rag_user_id,
+                    conversation_context=history,
+                )
+                if ctx.context_text:
+                    rag_context = ctx.context_text
+            except Exception as e:
+                print(f"[*] RAG query error (non-fatal): {e}")
+
+        # Inject RAG context into user input
+        if rag_context:
+            user_input = (
+                f"{rag_context}\n"
+                f"## User Query\n{user_input}"
+            )
+
+        # 6. Stream from brain
         full_response = ""
         for chunk in self.brain.generate_stream(
             user_input,
@@ -75,7 +114,7 @@ class FridayCore:
             full_response += chunk
             yield chunk
 
-        # 6. Post-process: execute tools and handle file delivery
+        # 7. Post-process: execute tools and handle file delivery
         processed, tool_used, metadata = self.executive.parse_and_execute(full_response)
 
         # Yield any tool execution markers that weren't already part of the stream

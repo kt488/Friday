@@ -1,6 +1,6 @@
 {
   "build": {
-    "buildCommand": "pip install -r requirements.txt"
+    "buildCommand": "pip install -r requirements-api.txt"
   },
   "deploy": {
     "startCommand": "bash start.sh",

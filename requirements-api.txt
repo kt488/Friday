@@ -1,0 +1,7 @@
+flask
+flask-cors
+gunicorn==22.0.0
+python-dotenv
+pyjwt
+cryptography
+requests
