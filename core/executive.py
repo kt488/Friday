@@ -1,6 +1,8 @@
 from tools.system import get_tool_map
 from core.mcp_client import MCPManager
 from core.supabase_client import SupabaseClient
+from harness.domain_skills import get_registry as get_skill_registry
+
 
 class FridayExecutive:
     def __init__(self):
@@ -8,6 +10,26 @@ class FridayExecutive:
         self.mcp = MCPManager()
         self.mcp.start_clients()
         self.supabase = SupabaseClient()
+
+        # Domain skills registry — indexes harness/domain_skills/ markdown
+        try:
+            self.skills = get_skill_registry()
+        except Exception as e:
+            print(f"[*] Domain skills registry init error (non-fatal): {e}")
+            self.skills = None
+
+    def get_all_skills_description(self) -> str:
+        """Return a formatted string of available domain skills for the system prompt."""
+        if not self.skills:
+            return ""
+
+        lines = ["\n--- Domain Skills (domain-specific expertise) ---"]
+        for s in self.skills.summaries():
+            # s: {domain, title, file, workflows}
+            wf = s["workflows"]
+            wf_hint = f" — {wf[0]}" if wf else ""
+            lines.append(f"- [{s['domain']}] {s['title']}{wf_hint}")
+        return "\n".join(lines)
 
     def handle_tool_call(self, tool_name, args=None):
         """Executes a tool by name and returns the result."""

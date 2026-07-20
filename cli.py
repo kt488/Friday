@@ -4,6 +4,7 @@
 Usage:
   friday                   Start interactive session (default)
   friday ask 'message'     One-shot question
+  friday terminal          Launch the hybrid shell+AI terminal
   friday api               Start REST API
   friday bot               Start Telegram bot
   friday history           View conversation history
@@ -185,6 +186,12 @@ def cmd_bot(args):
     cli.success("Bot process launched.")
     ret = subprocess.call([sys.executable, "-m", "interface.telegram_bot"])
     sys.exit(ret)
+
+
+def cmd_terminal(args):
+    """Launch the hybrid shell + AI terminal."""
+    from interface.terminal import main as terminal_main
+    terminal_main()
 
 
 # ── History ──
@@ -372,6 +379,10 @@ def main():
     # ── system ──
     p_system = subparsers.add_parser("system", help="Show system information and status")
     p_system.set_defaults(func=cmd_system)
+
+    # ── terminal ──
+    p_terminal = subparsers.add_parser("terminal", help="Launch hybrid shell + AI terminal")
+    p_terminal.set_defaults(func=cmd_terminal)
 
     # ── keys ──
     p_keys = subparsers.add_parser("keys", help="Manage API keys")

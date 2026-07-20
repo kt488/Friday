@@ -1,1 +1,0 @@
-This is a **bold** text. And this is a _italic_ text. And this is a `code` text.

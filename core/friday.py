@@ -76,8 +76,10 @@ class FridayCore:
         if active_agent:
             agent_prompt = self.brain.load_agent_prompt(active_agent) or ""
 
-        # 4. Load MCP tools description
+        # 4. Load MCP tools + domain skills
         mcp_desc = self.executive.mcp.get_all_tools_description()
+        skills_desc = self.executive.get_all_skills_description()
+        extra_tools = "\n".join(filter(None, [mcp_desc, skills_desc]))
 
         # 5. RAG enrichment
         rag = self._get_rag()
@@ -108,7 +110,7 @@ class FridayCore:
             user_input,
             image_path=image_path,
             history=history,
-            extra_tools=mcp_desc,
+            extra_tools=extra_tools,
             agent_prompt=agent_prompt
         ):
             full_response += chunk
@@ -137,6 +139,8 @@ class FridayCore:
 
         system_prompt = self.tenants.build_system_prompt(slug)
         mcp_desc = self.executive.mcp.get_all_tools_description()
+        skills_desc = self.executive.get_all_skills_description()
+        extra_tools = "\n".join(filter(None, [mcp_desc, skills_desc]))
         history = conversation_context or []
 
         full_response = ""
@@ -144,7 +148,7 @@ class FridayCore:
             user_text,
             image_path=image_path,
             history=history,
-            extra_tools=mcp_desc,
+            extra_tools=extra_tools,
             system_prompt_override=system_prompt
         ):
             full_response += chunk
