@@ -24,13 +24,22 @@ from functools import wraps
 from flask import Blueprint, request, jsonify, send_from_directory, Response, stream_with_context
 from werkzeug.utils import secure_filename
 
-from core.friday import FridayCore
-from core.config import Config
-from core.saas import SaaSService
+try:
+    from core.friday import FridayCore
+except ImportError:
+    FridayCore = None
+try:
+    from core.config import Config
+except ImportError:
+    Config = None
+try:
+    from core.saas import SaaSService
+except ImportError:
+    SaaSService = None
 
 bp = Blueprint("universal_api", __name__, url_prefix="/api/v3")
 
-TEMP_DIR = Config.TEMP_DIR
+TEMP_DIR = getattr(Config, 'TEMP_DIR', '/tmp/friday') if Config else '/tmp/friday'
 
 # ── Helpers ──
 

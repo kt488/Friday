@@ -34,12 +34,18 @@ try:
     from core.saas import SaaSService
 except ImportError:
     SaaSService = None
-from interface.universal_api import bp as universal_api_bp
+try:
+    from interface.universal_api import bp as universal_api_bp
+except ImportError as e:
+    print(f"[WARN] universal_api blueprint not loaded: {e}", flush=True)
+    universal_api_bp = None
+
 
 load_dotenv()
 
 app = Flask(__name__)
-app.register_blueprint(universal_api_bp)
+if universal_api_bp is not None:
+    app.register_blueprint(universal_api_bp)
 try:
     friday = FridayCore()
 except Exception as e:
@@ -52,7 +58,7 @@ except Exception as e:
     print(f"[FATAL] SaaSService() failed: {e}", flush=True)
     saas = None
 
-TEMP_DIR = Config.TEMP_DIR
+TEMP_DIR = getattr(Config, 'TEMP_DIR', '/tmp/friday') if Config else '/tmp/friday'
 os.makedirs(TEMP_DIR, exist_ok=True)
 
 API_KEY = os.getenv("FRIDAY_API_KEY", "")
