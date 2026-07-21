@@ -23,6 +23,7 @@ class Config:
     # Directory Settings
     TEMP_DIR = os.path.abspath("temp")
     AGENTS_DIR = os.path.abspath("agents")
+    SANDBOX_DIR = os.path.abspath(".sandbox")
     
     # JWT Settings (used by SaaS auth)
     FRIDAY_JWT_SECRET = os.getenv("FRIDAY_JWT_SECRET", "")
