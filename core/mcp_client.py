@@ -206,6 +206,14 @@ class MCPManager:
                 self._attempt_start(pw_client)
         else:
             print("[MCP] Skipping Playwright MCP as it is not supported on Android.")
+
+        # 3. Astryx Design MCP
+        astryx_server_path = "/data/data/com.termux/files/home/Friday/astryx-mcp/index.js"
+        if os.path.exists(astryx_server_path):
+            astryx_client = MCPClient("Astryx Design", ["node", astryx_server_path])
+            self._attempt_start(astryx_client)
+        else:
+            print("[MCP] Astryx Design MCP server not found at expected path.")
             
     def _attempt_start(self, client: MCPClient):
         try:

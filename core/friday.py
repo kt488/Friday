@@ -125,6 +125,10 @@ class FridayCore:
             if extra.strip():
                 yield extra
 
+        # 8. Handle file delivery from metadata — emit clean SEND_FILE_NOW tag
+        if metadata and metadata.get("type") == "file":
+            yield f"\n[SEND_FILE_NOW: {metadata['filepath']}]\n"
+
     def process_website_message_stream(self, slug, user_text, session_id,
                                         image_path=None, conversation_context=None):
         """Streaming pipeline for a tenant website's chatbot — stateless.
@@ -161,6 +165,10 @@ class FridayCore:
             extra = processed[len(full_response):]
             if extra.strip():
                 yield extra
+
+        # Handle file delivery from metadata
+        if metadata and metadata.get("type") == "file":
+            yield f"\n[SEND_FILE_NOW: {metadata['filepath']}]\n"
 
     def process_website_message(self, slug, user_text, session_id,
                                  image_path=None, conversation_context=None):

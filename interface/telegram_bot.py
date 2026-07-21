@@ -10,7 +10,7 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 from dotenv import load_dotenv
-from telegram import Update
+from telegram import Update, InputFile
 from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filters, CommandHandler
 from telegram.request import HTTPXRequest
 from core.friday import FridayCore
@@ -29,18 +29,68 @@ logging.basicConfig(
 # Initialize Friday Core
 friday = FridayCore()
 
+IMAGE_EXTENSIONS = ('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp')
+
+def _strip_tags(text):
+    """Remove all internal command tags from display text."""
+    text = re.sub(r'(?:\[TOOL:|\*\*TOOL:).*?(?:\]|\*\*)', '', text, flags=re.DOTALL)
+    text = re.sub(r'(?:\[SEND_FILE:|\*\*SEND_FILE:).*?(?:\]|\*\*)', '', text, flags=re.DOTALL)
+    text = re.sub(r'(?:\[SEND_FILE_NOW:|\*\*SEND_FILE_NOW:).*?(?:\]|\*\*)', '', text, flags=re.DOTALL)
+    return text.strip()
+
+def _find_file_tag(text):
+    """Extract file path from [SEND_FILE_NOW: path] tag. Returns path or None."""
+    m = re.search(r'(?:\[SEND_FILE_NOW:|\*\*SEND_FILE_NOW:)\s*(.*?)(?:\]|\*\*)', text, flags=re.DOTALL)
+    if not m:
+        return None
+    path = m.group(1).strip()
+    if (path.startswith('"') and path.endswith('"')) or \
+       (path.startswith("'") and path.endswith("'")):
+        path = path[1:-1]
+    return path
+
+async def send_file_to_chat(chat_id, file_path, context):
+    """Send a file to a Telegram chat, choosing photo vs document automatically."""
+    if not os.path.exists(file_path):
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=f"I tried to send {os.path.basename(file_path)}, but it seems I misplaced it."
+        )
+        return False
+
+    try:
+        ext = os.path.splitext(file_path)[1].lower()
+        filename = os.path.basename(file_path)
+
+        if ext in IMAGE_EXTENSIONS:
+            with open(file_path, 'rb') as f:
+                await context.bot.send_photo(chat_id=chat_id, photo=InputFile(f, filename=filename))
+        else:
+            with open(file_path, 'rb') as f:
+                await context.bot.send_document(chat_id=chat_id, document=InputFile(f, filename=filename))
+
+        logging.info(f"[Telegram] Sent file: {file_path}")
+        return True
+    except Exception as e:
+        logging.error(f"[Telegram] Failed to send file {file_path}: {e}")
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=f"Failed to send {os.path.basename(file_path)}. I'll try another way."
+        )
+        return False
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(
-        chat_id=update.effective_chat.id, 
+        chat_id=update.effective_chat.id,
         text="I'm here. System is fully integrated and awaiting your command. What's on your mind?"
     )
 
 async def process_and_respond(update: Update, context: ContextTypes.DEFAULT_TYPE, user_text=None, image_path=None):
     chat_id = update.effective_chat.id
-    
+
     # Send a "typing" action
     await context.bot.send_chat_action(chat_id=chat_id, action="typing")
-    
+
     # Initialize placeholder message
     if image_path:
         placeholder = "Analyzing image..."
@@ -49,42 +99,40 @@ async def process_and_respond(update: Update, context: ContextTypes.DEFAULT_TYPE
     else:
         placeholder = "..."
     status_msg = await context.bot.send_message(chat_id=chat_id, text=placeholder)
-    
+
     full_text = ""
     last_update_time = 0
     update_interval = 0.15  # ~6fps refresh for smooth streaming display
-    
+
     try:
         for chunk in friday.process_message_stream(user_text, image_path=image_path):
             full_text += chunk
-            
+
+            # Check if this chunk contains a file delivery tag — send immediately
+            file_path = _find_file_tag(chunk)
+            if file_path:
+                await send_file_to_chat(chat_id, file_path, context)
+                # Remove the tag from display text for the next update
+                full_text = _strip_tags(full_text)
+                continue
+
             # Update message if interval has passed
             current_time = time.time()
             if current_time - last_update_time > update_interval:
                 try:
-                    if full_text.strip():
-                        # Filter out internal tags before showing user
-                        display_text = re.sub(r'(?:\[TOOL:|\*\*TOOL:).*?(?:\]|\*\*)', '', full_text, flags=re.DOTALL)
-                        display_text = re.sub(r'(?:\[SEND_FILE:|\*\*SEND_FILE:).*?(?:\]|\*\*)', '', display_text, flags=re.DOTALL)
-                        display_text = re.sub(r'(?:\[SEND_FILE_NOW:|\*\*SEND_FILE_NOW:).*?(?:\]|\*\*)', '', display_text, flags=re.DOTALL)
-                        
-                        if display_text.strip():
-                            await context.bot.edit_message_text(
-                                chat_id=chat_id,
-                                message_id=status_msg.message_id,
-                                text=display_text + " ▌"
-                            )
-                        last_update_time = current_time
+                    display_text = _strip_tags(full_text)
+                    if display_text:
+                        await context.bot.edit_message_text(
+                            chat_id=chat_id,
+                            message_id=status_msg.message_id,
+                            text=display_text + " ▌"
+                        )
+                    last_update_time = current_time
                 except Exception:
                     pass
-                    
-        # Final update
-        display_text = re.sub(r'(?:\[TOOL:|\*\*TOOL:).*?(?:\]|\*\*)', '', full_text, flags=re.DOTALL)
-        # Handle [SEND_FILE_NOW: path] tag — file ready for direct delivery
-        file_match = re.search(r'(?:\[SEND_FILE_NOW:|\*\*SEND_FILE_NOW:)\s*(.*?)(?:\]|\*\*)', full_text, flags=re.DOTALL)
-        display_text = re.sub(r'(?:\[SEND_FILE:|\*\*SEND_FILE:).*?(?:\]|\*\*)', '', display_text, flags=re.DOTALL)
-        display_text = re.sub(r'(?:\[SEND_FILE_NOW:|\*\*SEND_FILE_NOW:).*?(?:\]|\*\*)', '', display_text, flags=re.DOTALL).strip()
-        
+
+        # Final update — strip all tags and show clean text
+        display_text = _strip_tags(full_text)
         if not display_text:
             display_text = "Done."
 
@@ -93,17 +141,6 @@ async def process_and_respond(update: Update, context: ContextTypes.DEFAULT_TYPE
             message_id=status_msg.message_id,
             text=display_text
         )
-        
-        if file_match:
-            file_path = file_match.group(1).strip()
-            if (file_path.startswith('"') and file_path.endswith('"')) or \
-               (file_path.startswith("'") and file_path.endswith("'")):
-                file_path = file_path[1:-1]
-            if os.path.exists(file_path):
-                await context.bot.send_document(chat_id=chat_id, document=open(file_path, 'rb'))
-            else:
-                await context.bot.send_message(chat_id=chat_id, text=f"I tried to send {os.path.basename(file_path)}, but it seems I misplaced it.")
-
 
     except Exception as e:
         logging.error(f"Error in process_and_respond: {e}")
