@@ -189,6 +189,17 @@ class FridayBrain:
                 "IMPORTANT: When using create_file, you MUST provide exactly two string arguments: [TOOL: create_file(\"temp/file.txt\", \"This is the content\")]\n"
                 "To use an MCP tool with JSON args: [TOOL: tool_name({\"arg1\": \"value1\"})]\n"
                 "To send a file to the user: [SEND_FILE: path]\n\n"
+                "PERSISTENT MEMORY SYSTEM:\n"
+                "- You have a persistent memory system that remembers across conversations.\n"
+                "- Relevant past context (projects, preferences, decisions, active tasks) will be automatically injected into your prompt under 'Persistent Memory Context'.\n"
+                "- Use this context to maintain continuity — don't ask for info you already have.\n"
+                "- To explicitly save something for later: [MEMORY: key=value] — e.g., [MEMORY: user_prefers_python=true]\n"
+                "- When the user makes a decision, note it: [MEMORY: decision=switched to PostgreSQL]\n"
+                "- To track an ongoing task: [MEMORY: task=fix login bug] — the system will note it.\n"
+                "- If the user corrects you, update your memory: [MEMORY: correction=previous_belief -> new_fact]\n"
+                "- You can check active tasks with: [MEMORY: list_tasks]\n"
+                "- Never ask for information that's already in your memory context.\n"
+                "- Never repeat questions the user has already answered.\n\n"
                 "Be human. Be yourself. Be Friday."
             )
 

@@ -74,10 +74,10 @@ class TaskItem:
     id: str
     description: str
     status: TaskStatus
-    project: Optional[str] = None
-    priority: int = 0  # 0-5
     created_at: str
     updated_at: str
+    project: Optional[str] = None
+    priority: int = 0  # 0-5
     tags: List[str] = field(default_factory=list)
 
 
